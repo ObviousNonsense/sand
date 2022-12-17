@@ -7,12 +7,13 @@ pub enum ParticleType {
 
 pub struct Particle {
     pub particle_type: ParticleType,
+    pub id: usize,
     position: (usize, usize),
     color: Color,
 }
 
 impl Particle {
-    pub fn new(x: usize, y: usize, particle_type: ParticleType) -> Self {
+    pub fn new(x: usize, y: usize, particle_type: ParticleType, id: usize) -> Self {
         let color = match particle_type {
             ParticleType::Concrete => GRAY,
             ParticleType::Sand => YELLOW,
@@ -20,6 +21,7 @@ impl Particle {
 
         Self {
             particle_type,
+            id,
             position: (x, y),
             color,
         }
