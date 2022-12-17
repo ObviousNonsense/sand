@@ -13,6 +13,8 @@ const GRID_HEIGHT: usize = 5;
 const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 50.0;
 
+const MINIMUM_FRAME_TIME: f64 = 0.1;
+
 fn window_conf() -> Conf {
     Conf {
         window_title: "Sand".to_owned(),
@@ -43,12 +45,20 @@ async fn main() -> Result<()> {
         1,
     );
 
-    loop {
-        clear_background(BLACK);
-        // draw_all_particles(&particle_grid);
-        draw_all_particles(&particle_dict);
+    let mut tic = get_time();
 
-        next_frame().await
+    loop {
+        let frame_time = get_time() - tic;
+        if frame_time >= MINIMUM_FRAME_TIME {
+            // let fps = 1. / frame_time;
+            // println!("{}", fps);
+
+            clear_background(BLACK);
+
+            draw_all_particles(&particle_dict);
+            tic = get_time();
+            next_frame().await
+        }
     }
     // Ok(())
 }
