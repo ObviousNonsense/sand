@@ -1,3 +1,4 @@
+use ::rand::random;
 use color_eyre::eyre::Result;
 use macroquad::prelude::*;
 use std::{collections::HashMap, ops::RangeFrom};
@@ -8,8 +9,8 @@ use particle::*;
 mod particle;
 // mod world;
 
-const GRID_WIDTH: usize = 6;
-const GRID_HEIGHT: usize = 5;
+const GRID_WIDTH: usize = 8;
+const GRID_HEIGHT: usize = 10;
 const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 50.0;
 
@@ -32,14 +33,37 @@ async fn main() -> Result<()> {
     // color_eyre::install()?;
 
     let mut id_generator: RangeFrom<usize> = 0..;
+    let mut id_list: Vec<usize> = vec![];
 
     // Initialize Grid
-    let (mut particle_grid, mut particle_dict) = initialize_empty_world(&mut id_generator);
+    let (mut particle_grid, mut particle_dict) =
+        initialize_empty_world(&mut id_generator, &mut id_list);
     // let mut particle_grid = initialize_empty_grid();
     add_new_particle(
         &mut particle_grid,
         &mut particle_dict,
         &mut id_generator,
+        &mut id_list,
+        ParticleType::Sand,
+        GRID_WIDTH / 2,
+        3,
+    );
+
+    add_new_particle(
+        &mut particle_grid,
+        &mut particle_dict,
+        &mut id_generator,
+        &mut id_list,
+        ParticleType::Sand,
+        GRID_WIDTH / 2,
+        2,
+    );
+
+    add_new_particle(
+        &mut particle_grid,
+        &mut particle_dict,
+        &mut id_generator,
+        &mut id_list,
         ParticleType::Sand,
         GRID_WIDTH / 2,
         1,
@@ -54,8 +78,33 @@ async fn main() -> Result<()> {
             // println!("{}", fps);
 
             clear_background(BLACK);
-
             draw_all_particles(&particle_dict);
+
+            // Update all particles
+            for id in id_list.iter() {
+                let particle = particle_dict.get_mut(id).unwrap();
+                match particle.particle_type {
+                    ParticleType::Concrete => {}
+                    ParticleType::Sand => {
+                        let r = random();
+                        let right: isize = if r { -1 } else { 1 };
+                        let check_directions = [(0, 1), (right, 1), (0 - right, 1)];
+                        for (dx, dy) in check_directions.iter() {
+                            let (other_x, other_y) =
+                                ((particle.x() as isize + dx) as usize, particle.y() + dy);
+                            let other_id = get_id_by_xy(&particle_grid, other_x, other_y);
+                            match other_id {
+                                None => {
+                                    move_particle(&mut particle_grid, particle, other_x, other_y);
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+
             tic = get_time();
             next_frame().await
         }
@@ -69,6 +118,7 @@ fn add_new_particle(
     grid: &mut Vec<Option<usize>>,
     dict: &mut HashMap<usize, Particle>,
     id_generator: &mut RangeFrom<usize>,
+    id_list: &mut Vec<usize>,
     new_particle_type: ParticleType,
     x: usize,
     y: usize,
@@ -78,6 +128,7 @@ fn add_new_particle(
         Some(_) => {}
         None => {
             let new_id = id_generator.next().unwrap();
+            id_list.push(new_id);
             let new_particle = Particle::new(x, y, new_particle_type, new_id);
             dict.insert(new_id, new_particle);
             grid[xy_to_index(x, y)] = Some(new_id);
@@ -85,18 +136,16 @@ fn add_new_particle(
     }
 }
 
-// fn get_particle_by_xy<'a>(
-//     grid: Vec<Option<usize>>,
-//     dict: HashMap<usize, Particle>,
-//     x: usize,
-//     y: usize,
-// ) -> Option<&'a Particle> {
-//     let id = grid[xy_to_index(x, y)];
-//     match id {
-//         Some(id) => dict.get(&id),
-//         None => None,
-//     }
-// }
+fn move_particle(
+    grid: &mut Vec<Option<usize>>,
+    particle: &mut Particle,
+    new_x: usize,
+    new_y: usize,
+) {
+    grid[xy_to_index(new_x, new_y)] = Some(particle.id);
+    grid[xy_to_index(particle.x(), particle.y())] = None;
+    particle.move_to(new_x, new_y);
+}
 
 fn get_id_by_xy(grid: &Vec<Option<usize>>, x: usize, y: usize) -> Option<usize> {
     grid[xy_to_index(x, y)]
@@ -104,6 +153,7 @@ fn get_id_by_xy(grid: &Vec<Option<usize>>, x: usize, y: usize) -> Option<usize> 
 
 fn initialize_empty_world(
     id_generator: &mut RangeFrom<usize>,
+    id_list: &mut Vec<usize>,
 ) -> (Vec<Option<usize>>, HashMap<usize, Particle>) {
     //
     let mut grid: Vec<Option<usize>> = vec![];
@@ -121,6 +171,7 @@ fn initialize_empty_world(
                     &mut grid,
                     &mut dict,
                     id_generator,
+                    id_list,
                     ParticleType::Concrete,
                     x,
                     y,

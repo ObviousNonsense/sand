@@ -1,14 +1,17 @@
 use super::*;
 
+#[derive(Clone)]
 pub enum ParticleType {
     Sand,
     Concrete,
 }
 
+#[derive(Clone)]
 pub struct Particle {
     pub particle_type: ParticleType,
     pub id: usize,
-    position: (usize, usize),
+    x: usize,
+    y: usize,
     color: Color,
 }
 
@@ -22,19 +25,27 @@ impl Particle {
         Self {
             particle_type,
             id,
-            position: (x, y),
+            x,
+            y,
             color,
         }
     }
 
-    pub fn position(&self) -> (usize, usize) {
-        self.position
+    // pub fn position(&self) -> (usize, usize) {
+    //     self.position
+    // }
+
+    pub fn x(&self) -> usize {
+        self.x
+    }
+
+    pub fn y(&self) -> usize {
+        self.y
     }
 
     pub fn draw(&self) {
-        let (x, y) = self.position;
-        let xpt = PIXELS_PER_PARTICLE * x as f32;
-        let ypt = PIXELS_PER_PARTICLE * y as f32;
+        let xpt = PIXELS_PER_PARTICLE * self.x as f32;
+        let ypt = PIXELS_PER_PARTICLE * self.y as f32;
         draw_rectangle(
             xpt,
             ypt,
@@ -44,8 +55,9 @@ impl Particle {
         );
     }
 
-    pub fn update(&mut self) {
-        todo!();
+    pub fn move_to(&mut self, x: usize, y: usize) {
+        self.x = x;
+        self.y = y;
     }
 }
 
