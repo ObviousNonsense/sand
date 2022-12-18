@@ -1,12 +1,12 @@
 use super::*;
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub enum ParticleType {
     Sand,
     Concrete,
 }
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct Particle {
     pub particle_type: ParticleType,
     pub id: usize,
