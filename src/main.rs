@@ -53,6 +53,7 @@ async fn main() -> Result<()> {
     let mut brush_size = 1.0;
     let mut highlight_brush = true;
     let mut display_fps = false;
+    let mut placement_type = ParticleType::Sand;
 
     loop {
         let frame_time = get_time() - tic;
@@ -78,6 +79,14 @@ async fn main() -> Result<()> {
             (mousex_min, mousex_max, mousey_min, mousey_max)
         }
 
+        if is_key_pressed(KeyCode::Key1) {
+            placement_type = ParticleType::Sand;
+            println!("Placement Type: Sand")
+        } else if is_key_pressed(KeyCode::Key2) {
+            placement_type = ParticleType::Water;
+            println!("Placement Type: Water")
+        }
+
         // Add particles on left click
         if is_mouse_button_down(MouseButton::Left) {
             let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(brush_size);
@@ -97,7 +106,7 @@ async fn main() -> Result<()> {
                         &mut particle_dict,
                         &mut id_generator,
                         &mut id_list,
-                        ParticleType::Sand,
+                        placement_type,
                         x,
                         y,
                     );
@@ -223,7 +232,27 @@ fn update_all_particles(
                 }
             }
             ParticleType::Water => {
-                todo!();
+                let r = random();
+                let right: isize = if r { -1 } else { 1 };
+                let check_directions = [
+                    (0, 1),
+                    (right, 1),
+                    (0 - right, 1),
+                    (right, 0),
+                    (0 - right, 0),
+                ];
+                for (dx, dy) in check_directions.iter() {
+                    let (other_x, other_y) =
+                        ((particle.x() as isize + dx) as usize, particle.y() + dy);
+                    let other_id = get_id_by_xy(&particle_grid, other_x, other_y);
+                    match other_id {
+                        None => {
+                            move_particle(particle_grid, particle, other_x, other_y);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
     }
