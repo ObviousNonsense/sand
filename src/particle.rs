@@ -1,11 +1,15 @@
 use super::*;
 
-// #[derive(Clone)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ParticleType {
     Sand,
     Water,
     Concrete,
+}
+
+#[derive(Debug)]
+struct LiquidProperties {
+    moving_right: bool,
 }
 
 // #[derive(Clone)]
@@ -16,6 +20,7 @@ pub struct Particle {
     x: usize,
     y: usize,
     color: Color,
+    liquid_properties: Option<LiquidProperties>,
 }
 
 impl Particle {
@@ -25,6 +30,12 @@ impl Particle {
             ParticleType::Sand => YELLOW,
             ParticleType::Concrete => GRAY,
         };
+        let liquid_properties: Option<LiquidProperties> = match particle_type {
+            ParticleType::Water => Some(LiquidProperties {
+                moving_right: random(),
+            }),
+            _ => None,
+        };
 
         Self {
             particle_type,
@@ -32,6 +43,7 @@ impl Particle {
             x,
             y,
             color,
+            liquid_properties,
         }
     }
 
@@ -57,14 +69,14 @@ impl Particle {
             PIXELS_PER_PARTICLE,
             self.color,
         );
-        draw_rectangle_lines(
-            xpt,
-            ypt,
-            PIXELS_PER_PARTICLE,
-            PIXELS_PER_PARTICLE,
-            2.0,
-            BLACK,
-        );
+        // draw_rectangle_lines(
+        //     xpt,
+        //     ypt,
+        //     PIXELS_PER_PARTICLE,
+        //     PIXELS_PER_PARTICLE,
+        //     2.0,
+        //     BLACK,
+        // );
     }
 
     pub fn move_to(&mut self, x: usize, y: usize) {

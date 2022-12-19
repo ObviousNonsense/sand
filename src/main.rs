@@ -9,12 +9,12 @@ use particle::*;
 mod particle;
 // mod world;
 
-const GRID_WIDTH: usize = 50;
-const GRID_HEIGHT: usize = 50;
+const GRID_WIDTH: usize = 100;
+const GRID_HEIGHT: usize = 100;
 const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
-const PIXELS_PER_PARTICLE: f32 = 10.0;
+const PIXELS_PER_PARTICLE: f32 = 5.0;
 
-const MINIMUM_UPDATE_TIME: f64 = 0.5 / 60.;
+const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
 // const MINIMUM_FRAME_TIME: f64 = 1. / 5.;
 const LIMIT_UPDATE_RATE: bool = true;
 // const BRUSH_SIZE: f32 = 1.0;
