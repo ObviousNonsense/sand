@@ -4,6 +4,7 @@ use super::*;
 #[derive(Debug)]
 pub enum ParticleType {
     Sand,
+    Water,
     Concrete,
 }
 
@@ -20,8 +21,9 @@ pub struct Particle {
 impl Particle {
     pub fn new(x: usize, y: usize, particle_type: ParticleType, id: usize) -> Self {
         let color = match particle_type {
-            ParticleType::Concrete => GRAY,
+            ParticleType::Water => BLUE,
             ParticleType::Sand => YELLOW,
+            ParticleType::Concrete => GRAY,
         };
 
         Self {

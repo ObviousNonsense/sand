@@ -14,9 +14,9 @@ const GRID_HEIGHT: usize = 50;
 const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 10.0;
 
-const MINIMUM_FRAME_TIME: f64 = 1. / 60.;
+const MINIMUM_UPDATE_TIME: f64 = 0.5 / 60.;
 // const MINIMUM_FRAME_TIME: f64 = 1. / 5.;
-const LIMIT_FRAME_RATE: bool = true;
+const LIMIT_UPDATE_RATE: bool = true;
 // const BRUSH_SIZE: f32 = 1.0;
 
 fn window_conf() -> Conf {
@@ -45,54 +45,27 @@ async fn main() -> Result<()> {
     // Initialize Grid
     let (mut particle_grid, mut particle_dict) =
         initialize_empty_world(&mut id_generator, &mut id_list);
-    // let mut particle_grid = initialize_empty_grid();
-    add_new_particle(
-        &mut particle_grid,
-        &mut particle_dict,
-        &mut id_generator,
-        &mut id_list,
-        ParticleType::Sand,
-        GRID_WIDTH / 2,
-        3,
-    );
-
-    add_new_particle(
-        &mut particle_grid,
-        &mut particle_dict,
-        &mut id_generator,
-        &mut id_list,
-        ParticleType::Sand,
-        GRID_WIDTH / 2,
-        2,
-    );
-
-    add_new_particle(
-        &mut particle_grid,
-        &mut particle_dict,
-        &mut id_generator,
-        &mut id_list,
-        ParticleType::Sand,
-        GRID_WIDTH / 2,
-        1,
-    );
 
     let mut tic = get_time();
     let mut fps_counter = 0.0;
     let mut frame_time_sum = 0.0;
     let mut paused = false;
     let mut brush_size = 1.0;
-    let mut debug_mode = false;
+    let mut highlight_brush = true;
+    let mut display_fps = false;
 
     loop {
         let frame_time = get_time() - tic;
 
-        // ─── Drawing ─────────────────────────────────────
+        // ─── Drawing ─────────────────────────────────────────────────────────────
         clear_background(BLACK);
         draw_all_particles(&particle_dict);
-        // ─────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────────────
 
-        // ─── Mouse Input ─────────────────────────────────
-        if is_mouse_button_down(MouseButton::Left) && !debug_mode {
+        // ─── Input ───────────────────────────────────────────────────────────────
+        /* #region   */
+        // Function to calculate the coordinates of the placement brush
+        fn calculate_brush(brush_size: f32) -> (usize, usize, usize, usize) {
             let (px, py) = mouse_position();
             let mousex = px / PIXELS_PER_PARTICLE;
             let mousey = py / PIXELS_PER_PARTICLE;
@@ -101,6 +74,13 @@ async fn main() -> Result<()> {
             let mousex_max = (mousex + brush_span).clamp(0., GRID_WIDTH as f32) as usize;
             let mousey_min = (mousey - brush_span).clamp(0., GRID_HEIGHT as f32) as usize;
             let mousey_max = (mousey + brush_span).clamp(0., GRID_HEIGHT as f32) as usize;
+
+            (mousex_min, mousex_max, mousey_min, mousey_max)
+        }
+
+        // Add particles on left click
+        if is_mouse_button_down(MouseButton::Left) {
+            let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(brush_size);
 
             // println!("Brush span = {}", brush_span);
             for x in mousex_min..mousex_max {
@@ -125,32 +105,41 @@ async fn main() -> Result<()> {
             }
         }
 
-        if debug_mode {
+        // Highlight a box around the brush is highlight_brush is true
+        if highlight_brush {
+            let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(brush_size);
+            let xpt = mousex_min as f32 * PIXELS_PER_PARTICLE;
+            let ypt = mousey_min as f32 * PIXELS_PER_PARTICLE;
+            let sizex = (mousex_max - mousex_min) as f32 * PIXELS_PER_PARTICLE;
+            let sizey = (mousey_max - mousey_min) as f32 * PIXELS_PER_PARTICLE;
+
+            draw_rectangle_lines(xpt, ypt, sizex, sizey, 3.0, RED);
+            draw_rectangle(xpt, ypt, sizex, sizey, Color::new(1.0, 1.0, 0.0, 0.2));
+        }
+
+        if is_mouse_button_pressed(MouseButton::Right) {
             let (px, py) = mouse_position();
             let mousex = px / PIXELS_PER_PARTICLE;
             let mousey = py / PIXELS_PER_PARTICLE;
             let x = mousex as usize;
             let y = mousey as usize;
 
-            let xpt = x as f32 * PIXELS_PER_PARTICLE;
-            let ypt = y as f32 * PIXELS_PER_PARTICLE;
-
-            draw_rectangle_lines(xpt, ypt, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, 2.0, RED);
-
-            if is_mouse_button_pressed(MouseButton::Left) {
-                let id = particle_grid[xy_to_index(x, y)];
-                match id {
-                    Some(id) => {
-                        let p = particle_dict.get(&id).unwrap();
-                        println!("({}, {}): {:?}", x, y, p);
-                    }
-                    None => {
-                        println!("({}, {}): no particle", x, y);
-                    }
+            let id = particle_grid[xy_to_index(x, y)];
+            match id {
+                Some(id) => {
+                    let p = particle_dict.get(&id).unwrap();
+                    println!("({}, {}): {:?}", x, y, p);
+                }
+                None => {
+                    println!("({}, {}): no particle", x, y);
                 }
             }
         }
-        // ─────────────────────────────────────────────────
+
+        if is_key_pressed(KeyCode::A) && paused {
+            draw_all_particles(&particle_dict);
+            update_all_particles(&mut particle_grid, &mut particle_dict, &mut id_list);
+        }
 
         if is_key_pressed(KeyCode::Space) {
             paused = !paused;
@@ -161,23 +150,25 @@ async fn main() -> Result<()> {
             }
         }
 
-        if is_key_pressed(KeyCode::D) {
-            debug_mode = !debug_mode;
-            if debug_mode {
-                println!("ENTERING DEBUG MODE");
-            } else {
-                println!("LEAVING DEBUG MODE");
-            }
+        if is_key_pressed(KeyCode::H) {
+            highlight_brush = !highlight_brush;
         }
 
         let (_, mouse_wheel_y) = mouse_wheel();
         if (mouse_wheel_y - 0.0).abs() > 0.000001 {
             brush_size += mouse_wheel_y.signum();
-            println!("Brush size: {}", brush_size);
+            brush_size = brush_size.clamp(1.0, usize::max(GRID_WIDTH, GRID_HEIGHT) as f32);
+            // println!("Brush size: {}", brush_size);
         }
 
-        if !LIMIT_FRAME_RATE || frame_time >= MINIMUM_FRAME_TIME {
-            // ─── Limiting And Printing Fps ───────────────────
+        if is_key_pressed(KeyCode::F) {
+            display_fps = !display_fps;
+        }
+        /* #endregion */
+        // ─────────────────────────────────────────────────────────────────────────
+
+        if !LIMIT_UPDATE_RATE || frame_time >= MINIMUM_UPDATE_TIME {
+            // ─── Limiting And Printing Fps ───────────────────────────────
             tic = get_time();
             fps_counter += 1.0;
             frame_time_sum += frame_time;
@@ -186,15 +177,17 @@ async fn main() -> Result<()> {
                 let fps = 50.0 / frame_time_sum;
                 fps_counter = 0.0;
                 frame_time_sum = 0.0;
-                // println!("{:.2}", fps);
+                if display_fps {
+                    println!("{:.2}", fps);
+                }
             }
-            // ─────────────────────────────────────────────────
+            // ─────────────────────────────────────────────────────────────
 
-            // ─── Update All Particles ────────────────────────
+            // ─── Update All Particles ────────────────────────────────────
             if !paused {
                 update_all_particles(&mut particle_grid, &mut particle_dict, &mut id_list);
             }
-            // ─────────────────────────────────────────────────
+            // ─────────────────────────────────────────────────────────────
         }
         next_frame().await
     }
@@ -228,6 +221,9 @@ fn update_all_particles(
                         _ => {}
                     }
                 }
+            }
+            ParticleType::Water => {
+                todo!();
             }
         }
     }
