@@ -14,8 +14,8 @@ const GRID_HEIGHT: usize = 50;
 const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 10.0;
 
-// const MINIMUM_FRAME_TIME: f64 = 1. / 60.;
-const MINIMUM_FRAME_TIME: f64 = 1. / 5.;
+const MINIMUM_FRAME_TIME: f64 = 1. / 60.;
+// const MINIMUM_FRAME_TIME: f64 = 1. / 5.;
 const LIMIT_FRAME_RATE: bool = true;
 // const BRUSH_SIZE: f32 = 1.0;
 
@@ -25,7 +25,8 @@ fn window_conf() -> Conf {
         window_height: GRID_HEIGHT as i32 * PIXELS_PER_PARTICLE as i32,
         window_width: GRID_WIDTH as i32 * PIXELS_PER_PARTICLE as i32,
         window_resizable: false,
-        high_dpi: true,
+        high_dpi: false,
+        sample_count: 0,
         ..Default::default()
     }
 }
@@ -191,34 +192,7 @@ async fn main() -> Result<()> {
 
             // ─── Update All Particles ────────────────────────
             if !paused {
-                for id in id_list.iter() {
-                    let particle = particle_dict.get_mut(id).unwrap();
-                    match particle.particle_type {
-                        ParticleType::Concrete => {}
-                        ParticleType::Sand => {
-                            let r = random();
-                            let right: isize = if r { -1 } else { 1 };
-                            let check_directions = [(0, 1), (right, 1), (0 - right, 1)];
-                            for (dx, dy) in check_directions.iter() {
-                                let (other_x, other_y) =
-                                    ((particle.x() as isize + dx) as usize, particle.y() + dy);
-                                let other_id = get_id_by_xy(&particle_grid, other_x, other_y);
-                                match other_id {
-                                    None => {
-                                        move_particle(
-                                            &mut particle_grid,
-                                            particle,
-                                            other_x,
-                                            other_y,
-                                        );
-                                        break;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                }
+                update_all_particles(&mut particle_grid, &mut particle_dict, &mut id_list);
             }
             // ─────────────────────────────────────────────────
         }
@@ -229,6 +203,36 @@ async fn main() -> Result<()> {
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 
 // ─── Grid Functions ────────────────────────────────────────────────────────────────────────── ✣ ─
+fn update_all_particles(
+    particle_grid: &mut Vec<Option<usize>>,
+    particle_dict: &mut HashMap<usize, Particle>,
+    id_list: &mut Vec<usize>,
+) {
+    for id in id_list.iter() {
+        let particle = particle_dict.get_mut(id).unwrap();
+        match particle.particle_type {
+            ParticleType::Concrete => {}
+            ParticleType::Sand => {
+                let r = random();
+                let right: isize = if r { -1 } else { 1 };
+                let check_directions = [(0, 1), (right, 1), (0 - right, 1)];
+                for (dx, dy) in check_directions.iter() {
+                    let (other_x, other_y) =
+                        ((particle.x() as isize + dx) as usize, particle.y() + dy);
+                    let other_id = get_id_by_xy(&particle_grid, other_x, other_y);
+                    match other_id {
+                        None => {
+                            move_particle(particle_grid, particle, other_x, other_y);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn add_new_particle(
     grid: &mut Vec<Option<usize>>,
     dict: &mut HashMap<usize, Particle>,

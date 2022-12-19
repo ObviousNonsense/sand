@@ -60,7 +60,7 @@ impl Particle {
             ypt,
             PIXELS_PER_PARTICLE,
             PIXELS_PER_PARTICLE,
-            1.0,
+            2.0,
             BLACK,
         );
     }
