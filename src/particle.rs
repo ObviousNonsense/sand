@@ -1,12 +1,14 @@
 use super::*;
 
 // #[derive(Clone)]
+#[derive(Debug)]
 pub enum ParticleType {
     Sand,
     Concrete,
 }
 
 // #[derive(Clone)]
+#[derive(Debug)]
 pub struct Particle {
     pub particle_type: ParticleType,
     pub id: usize,
@@ -52,6 +54,14 @@ impl Particle {
             PIXELS_PER_PARTICLE,
             PIXELS_PER_PARTICLE,
             self.color,
+        );
+        draw_rectangle_lines(
+            xpt,
+            ypt,
+            PIXELS_PER_PARTICLE,
+            PIXELS_PER_PARTICLE,
+            1.0,
+            BLACK,
         );
     }
 
