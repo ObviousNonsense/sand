@@ -1,7 +1,10 @@
 use ::rand::random;
 use color_eyre::eyre::Result;
 use macroquad::prelude::*;
-use std::{collections::HashMap, ops::RangeFrom};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::RangeFrom,
+};
 // use std::rc::{Rc, Weak};
 // use world::World;
 use particle::*;
@@ -31,6 +34,14 @@ fn window_conf() -> Conf {
     }
 }
 
+struct Settings {
+    paused: bool,
+    brush_size: f32,
+    highlight_brush: bool,
+    display_fps: bool,
+    placement_type: ParticleType,
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────── ✣ ─
 #[macroquad::main(window_conf)]
 async fn main() -> Result<()> {
@@ -40,7 +51,8 @@ async fn main() -> Result<()> {
     println!("Window width: {}", screen_width());
 
     let mut id_generator: RangeFrom<usize> = 0..;
-    let mut id_list: Vec<usize> = vec![];
+    // let mut id_list: Vec<usize> = vec![];
+    let mut id_list: HashSet<usize> = Default::default();
 
     // Initialize Grid
     let (mut particle_grid, mut particle_dict) =
@@ -49,11 +61,14 @@ async fn main() -> Result<()> {
     let mut tic = get_time();
     let mut fps_counter = 0.0;
     let mut frame_time_sum = 0.0;
-    let mut paused = false;
-    let mut brush_size = 1.0;
-    let mut highlight_brush = true;
-    let mut display_fps = false;
-    let mut placement_type = ParticleType::Sand;
+
+    let mut settings = Settings {
+        paused: false,
+        brush_size: 1.0,
+        highlight_brush: true,
+        display_fps: false,
+        placement_type: ParticleType::Sand,
+    };
 
     loop {
         let frame_time = get_time() - tic;
@@ -64,116 +79,13 @@ async fn main() -> Result<()> {
         // ─────────────────────────────────────────────────────────────────────────
 
         // ─── Input ───────────────────────────────────────────────────────────────
-        /* #region   */
-        // Function to calculate the coordinates of the placement brush
-        fn calculate_brush(brush_size: f32) -> (usize, usize, usize, usize) {
-            let (px, py) = mouse_position();
-            let mousex = px / PIXELS_PER_PARTICLE;
-            let mousey = py / PIXELS_PER_PARTICLE;
-            let brush_span = brush_size / 2.0;
-            let mousex_min = (mousex - brush_span).clamp(0., GRID_WIDTH as f32) as usize;
-            let mousex_max = (mousex + brush_span).clamp(0., GRID_WIDTH as f32) as usize;
-            let mousey_min = (mousey - brush_span).clamp(0., GRID_HEIGHT as f32) as usize;
-            let mousey_max = (mousey + brush_span).clamp(0., GRID_HEIGHT as f32) as usize;
-
-            (mousex_min, mousex_max, mousey_min, mousey_max)
-        }
-
-        if is_key_pressed(KeyCode::Key1) {
-            placement_type = ParticleType::Sand;
-            println!("Placement Type: Sand")
-        } else if is_key_pressed(KeyCode::Key2) {
-            placement_type = ParticleType::Water;
-            println!("Placement Type: Water")
-        }
-
-        // Add particles on left click
-        if is_mouse_button_down(MouseButton::Left) {
-            let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(brush_size);
-
-            // println!("Brush span = {}", brush_span);
-            for x in mousex_min..mousex_max {
-                // println!("x = {}", x);
-                if x >= GRID_WIDTH {
-                    continue;
-                }
-                for y in mousey_min..mousey_max {
-                    if y >= GRID_HEIGHT {
-                        continue;
-                    }
-                    add_new_particle(
-                        &mut particle_grid,
-                        &mut particle_dict,
-                        &mut id_generator,
-                        &mut id_list,
-                        placement_type,
-                        x,
-                        y,
-                    );
-                }
-            }
-        }
-
-        // Highlight a box around the brush is highlight_brush is true
-        if highlight_brush {
-            let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(brush_size);
-            let xpt = mousex_min as f32 * PIXELS_PER_PARTICLE;
-            let ypt = mousey_min as f32 * PIXELS_PER_PARTICLE;
-            let sizex = (mousex_max - mousex_min) as f32 * PIXELS_PER_PARTICLE;
-            let sizey = (mousey_max - mousey_min) as f32 * PIXELS_PER_PARTICLE;
-
-            draw_rectangle_lines(xpt, ypt, sizex, sizey, 3.0, RED);
-            draw_rectangle(xpt, ypt, sizex, sizey, Color::new(1.0, 1.0, 0.0, 0.2));
-        }
-
-        if is_mouse_button_pressed(MouseButton::Right) {
-            let (px, py) = mouse_position();
-            let mousex = px / PIXELS_PER_PARTICLE;
-            let mousey = py / PIXELS_PER_PARTICLE;
-            let x = mousex as usize;
-            let y = mousey as usize;
-
-            let id = particle_grid[xy_to_index(x, y)];
-            match id {
-                Some(id) => {
-                    let p = particle_dict.get(&id).unwrap();
-                    println!("({}, {}): {:?}", x, y, p);
-                }
-                None => {
-                    println!("({}, {}): no particle", x, y);
-                }
-            }
-        }
-
-        if is_key_pressed(KeyCode::A) && paused {
-            draw_all_particles(&particle_dict);
-            update_all_particles(&mut particle_grid, &mut particle_dict, &mut id_list);
-        }
-
-        if is_key_pressed(KeyCode::Space) {
-            paused = !paused;
-            if paused {
-                println!("PAUSING");
-            } else {
-                println!("UNPAUSING");
-            }
-        }
-
-        if is_key_pressed(KeyCode::H) {
-            highlight_brush = !highlight_brush;
-        }
-
-        let (_, mouse_wheel_y) = mouse_wheel();
-        if (mouse_wheel_y - 0.0).abs() > 0.000001 {
-            brush_size += mouse_wheel_y.signum();
-            brush_size = brush_size.clamp(1.0, usize::max(GRID_WIDTH, GRID_HEIGHT) as f32);
-            // println!("Brush size: {}", brush_size);
-        }
-
-        if is_key_pressed(KeyCode::F) {
-            display_fps = !display_fps;
-        }
-        /* #endregion */
+        handle_input(
+            &mut settings,
+            &mut particle_grid,
+            &mut particle_dict,
+            &mut id_generator,
+            &mut id_list,
+        );
         // ─────────────────────────────────────────────────────────────────────────
 
         if !LIMIT_UPDATE_RATE || frame_time >= MINIMUM_UPDATE_TIME {
@@ -186,14 +98,14 @@ async fn main() -> Result<()> {
                 let fps = 50.0 / frame_time_sum;
                 fps_counter = 0.0;
                 frame_time_sum = 0.0;
-                if display_fps {
+                if settings.display_fps {
                     println!("{:.2}", fps);
                 }
             }
             // ─────────────────────────────────────────────────────────────
 
             // ─── Update All Particles ────────────────────────────────────
-            if !paused {
+            if !settings.paused {
                 update_all_particles(&mut particle_grid, &mut particle_dict, &mut id_list);
             }
             // ─────────────────────────────────────────────────────────────
@@ -208,7 +120,7 @@ async fn main() -> Result<()> {
 fn update_all_particles(
     particle_grid: &mut Vec<Option<usize>>,
     particle_dict: &mut HashMap<usize, Particle>,
-    id_list: &mut Vec<usize>,
+    id_list: &HashSet<usize>,
 ) {
     for id in id_list.iter() {
         let particle = particle_dict.get_mut(id).unwrap();
@@ -262,7 +174,7 @@ fn add_new_particle(
     grid: &mut Vec<Option<usize>>,
     dict: &mut HashMap<usize, Particle>,
     id_generator: &mut RangeFrom<usize>,
-    id_list: &mut Vec<usize>,
+    id_list: &mut HashSet<usize>,
     new_particle_type: ParticleType,
     x: usize,
     y: usize,
@@ -272,7 +184,7 @@ fn add_new_particle(
         Some(_) => {}
         None => {
             let new_id = id_generator.next().unwrap();
-            id_list.push(new_id);
+            id_list.insert(new_id);
             let new_particle = Particle::new(x, y, new_particle_type, new_id);
             // println!("({}, {}): New {:?}", x, y, new_particle);
             dict.insert(new_id, new_particle);
@@ -298,7 +210,7 @@ fn get_id_by_xy(grid: &Vec<Option<usize>>, x: usize, y: usize) -> Option<usize> 
 
 fn initialize_empty_world(
     id_generator: &mut RangeFrom<usize>,
-    id_list: &mut Vec<usize>,
+    id_list: &mut HashSet<usize>,
 ) -> (Vec<Option<usize>>, HashMap<usize, Particle>) {
     //
     let mut grid: Vec<Option<usize>> = vec![];
@@ -339,14 +251,125 @@ fn draw_all_particles(dict: &HashMap<usize, Particle>) {
     for particle in dict.values() {
         particle.draw();
     }
-    // for space in grid.iter() {
-    //     if let Some(particle) = space {
-    //         particle.draw();
-    //     }
-    //     // match space {
-    //     //     Some(particle) => particle.draw(pixels_per_particle),
-    //     //     None => {}
-    //     // }
-    // }
 }
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
+
+// ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
+fn handle_input(
+    settings: &mut Settings,
+    particle_grid: &mut Vec<Option<usize>>,
+    particle_dict: &mut HashMap<usize, Particle>,
+    id_generator: &mut RangeFrom<usize>,
+    id_list: &mut HashSet<usize>,
+) {
+    // Function to calculate the coordinates of the placement brush
+    fn calculate_brush(brush_size: f32) -> (usize, usize, usize, usize) {
+        let (px, py) = mouse_position();
+        let mousex = px / PIXELS_PER_PARTICLE;
+        let mousey = py / PIXELS_PER_PARTICLE;
+        let brush_span = brush_size / 2.0;
+        let mousex_min = (mousex - brush_span).clamp(0., GRID_WIDTH as f32) as usize;
+        let mousex_max = (mousex + brush_span).clamp(0., GRID_WIDTH as f32) as usize;
+        let mousey_min = (mousey - brush_span).clamp(0., GRID_HEIGHT as f32) as usize;
+        let mousey_max = (mousey + brush_span).clamp(0., GRID_HEIGHT as f32) as usize;
+
+        (mousex_min, mousex_max, mousey_min, mousey_max)
+    }
+
+    if is_key_pressed(KeyCode::Key1) {
+        settings.placement_type = ParticleType::Sand;
+        println!("Placement Type: Sand")
+    } else if is_key_pressed(KeyCode::Key2) {
+        settings.placement_type = ParticleType::Water;
+        println!("Placement Type: Water")
+    }
+
+    // Add particles on left click
+    if is_mouse_button_down(MouseButton::Left) {
+        let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(settings.brush_size);
+
+        // println!("Brush span = {}", brush_span);
+        for x in mousex_min..mousex_max {
+            // println!("x = {}", x);
+            if x >= GRID_WIDTH {
+                continue;
+            }
+            for y in mousey_min..mousey_max {
+                if y >= GRID_HEIGHT {
+                    continue;
+                }
+                add_new_particle(
+                    particle_grid,
+                    particle_dict,
+                    id_generator,
+                    id_list,
+                    settings.placement_type,
+                    x,
+                    y,
+                );
+            }
+        }
+    }
+
+    // Highlight a box around the brush is highlight_brush is true
+    if settings.highlight_brush {
+        let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(settings.brush_size);
+        let xpt = mousex_min as f32 * PIXELS_PER_PARTICLE;
+        let ypt = mousey_min as f32 * PIXELS_PER_PARTICLE;
+        let sizex = (mousex_max - mousex_min) as f32 * PIXELS_PER_PARTICLE;
+        let sizey = (mousey_max - mousey_min) as f32 * PIXELS_PER_PARTICLE;
+
+        draw_rectangle_lines(xpt, ypt, sizex, sizey, 3.0, RED);
+        draw_rectangle(xpt, ypt, sizex, sizey, Color::new(1.0, 1.0, 0.0, 0.2));
+    }
+
+    if is_mouse_button_pressed(MouseButton::Right) {
+        let (px, py) = mouse_position();
+        let mousex = px / PIXELS_PER_PARTICLE;
+        let mousey = py / PIXELS_PER_PARTICLE;
+        let x = mousex as usize;
+        let y = mousey as usize;
+
+        let id = particle_grid[xy_to_index(x, y)];
+        match id {
+            Some(id) => {
+                let p = particle_dict.get(&id).unwrap();
+                println!("({}, {}): {:?}", x, y, p);
+            }
+            None => {
+                println!("({}, {}): no particle", x, y);
+            }
+        }
+    }
+
+    if is_key_pressed(KeyCode::A) && settings.paused {
+        draw_all_particles(&particle_dict);
+        update_all_particles(particle_grid, particle_dict, id_list);
+    }
+
+    if is_key_pressed(KeyCode::Space) {
+        settings.paused = !settings.paused;
+        if settings.paused {
+            println!("PAUSING");
+        } else {
+            println!("UNPAUSING");
+        }
+    }
+
+    if is_key_pressed(KeyCode::H) {
+        settings.highlight_brush = !settings.highlight_brush;
+    }
+
+    let (_, mouse_wheel_y) = mouse_wheel();
+    if (mouse_wheel_y - 0.0).abs() > 0.000001 {
+        settings.brush_size += mouse_wheel_y.signum();
+        settings.brush_size = settings
+            .brush_size
+            .clamp(1.0, usize::max(GRID_WIDTH, GRID_HEIGHT) as f32);
+        // println!("Brush size: {}", brush_size);
+    }
+
+    if is_key_pressed(KeyCode::F) {
+        settings.display_fps = !settings.display_fps;
+    }
+}
