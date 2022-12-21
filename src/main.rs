@@ -1,4 +1,4 @@
-use ::rand::{random, seq::SliceRandom, thread_rng};
+use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng};
 use color_eyre::eyre::Result;
 use macroquad::prelude::*;
 use std::{
@@ -52,10 +52,6 @@ async fn main() -> Result<()> {
     println!("Window height: {}", screen_height());
     println!("Window width: {}", screen_width());
 
-    // let mut id_generator: RangeFrom<usize> = 0..;
-    // let mut id_list: Vec<usize> = vec![];
-    // let mut id_list: HashSet<usize> = Default::default();
-
     // Initialize Grid
     let mut particle_grid = initialize_empty_world();
 
@@ -71,10 +67,6 @@ async fn main() -> Result<()> {
         placement_type: ParticleType::Sand,
     };
 
-    // add_new_particle(&mut particle_grid, ParticleType::Sand, GRID_WIDTH / 2, 3);
-    // add_new_particle(&mut particle_grid, ParticleType::Sand, GRID_WIDTH / 2, 2);
-    // add_new_particle(&mut particle_grid, ParticleType::Sand, GRID_WIDTH / 2, 1);
-
     loop {
         let frame_time = get_time() - tic;
 
@@ -84,7 +76,7 @@ async fn main() -> Result<()> {
         // ─────────────────────────────────────────────────────────────────────────
 
         // ─── Input ───────────────────────────────────────────────────────────────
-        handle_input(&mut settings, &mut particle_grid);
+        handle_input(&mut settings, &mut particle_grid, &mut rng);
         // ─────────────────────────────────────────────────────────────────────────
 
         if !LIMIT_UPDATE_RATE || frame_time >= MINIMUM_UPDATE_TIME {
@@ -105,50 +97,7 @@ async fn main() -> Result<()> {
 
             // ─── Update All Particles ────────────────────────────────────
             if !settings.paused {
-                let mut idx_range: Vec<usize> =
-                    ((GRID_WIDTH + 1)..((GRID_WIDTH - 1) * (GRID_HEIGHT - 1))).collect();
-                idx_range.shuffle(&mut rng);
-                for idx in idx_range.iter() {
-                    let (x, y) = index_to_xy(*idx);
-                    let particle = particle_grid[xy_to_index(x, y)];
-
-                    if !particle.moved {
-                        match particle.particle_type {
-                            ParticleType::Sand => {
-                                let r = random();
-                                let right: isize = if r { -1 } else { 1 };
-                                let check_directions = [(0, 1), (right, 1), (0 - right, 1)];
-
-                                for (dx, dy) in check_directions.iter() {
-                                    let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
-                                    let other =
-                                        particle_grid[xy_to_index(other_x, other_y)].particle_type;
-
-                                    match other {
-                                        ParticleType::Empty => {
-                                            particle_grid[xy_to_index(x, y)].moved = true;
-                                            (
-                                                particle_grid[xy_to_index(x, y)],
-                                                particle_grid[xy_to_index(other_x, other_y)],
-                                            ) = (
-                                                particle_grid[xy_to_index(other_x, other_y)],
-                                                particle_grid[xy_to_index(x, y)],
-                                            );
-                                            break;
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                // for x in 1..GRID_WIDTH - 1 {
-                //     for y in 1..GRID_HEIGHT - 1 {
-
-                //     }
-                // }
+                update_all_particles(&mut particle_grid, &mut rng);
             }
             // ─────────────────────────────────────────────────────────────
         }
@@ -212,6 +161,48 @@ async fn main() -> Result<()> {
 //     }
 // }
 
+fn update_all_particles(particle_grid: &mut Vec<Particle>, rng: &mut ThreadRng) {
+    let mut idx_range: Vec<usize> =
+        ((GRID_WIDTH + 1)..((GRID_WIDTH - 1) * (GRID_HEIGHT - 1))).collect();
+    idx_range.shuffle(rng);
+    for idx in idx_range.iter() {
+        let (x, y) = index_to_xy(*idx);
+        let particle = particle_grid[*idx];
+
+        if !particle.moved {
+            match particle.particle_type {
+                ParticleType::Sand => {
+                    let r = random();
+                    let right: isize = if r { -1 } else { 1 };
+                    let check_directions = [(0, 1), (right, 1), (0 - right, 1)];
+
+                    for (dx, dy) in check_directions.iter() {
+                        let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
+                        let other_type = particle_grid[xy_to_index(other_x, other_y)].particle_type;
+
+                        match other_type {
+                            ParticleType::Empty => {
+                                particle_grid[*idx].moved = true;
+                                (
+                                    particle_grid[*idx],
+                                    particle_grid[xy_to_index(other_x, other_y)],
+                                ) = (
+                                    particle_grid[xy_to_index(other_x, other_y)],
+                                    particle_grid[*idx],
+                                );
+
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 fn add_new_particle(
     particle_grid: &mut Vec<Particle>,
     new_particle_type: ParticleType,
@@ -223,25 +214,9 @@ fn add_new_particle(
         ParticleType::Empty => {
             particle_grid[xy_to_index(x, y)] = Particle::new(new_particle_type);
         }
-
         _ => {}
     }
 }
-
-// fn move_particle(
-//     grid: &mut Vec<Option<usize>>,
-//     particle: &mut Particle,
-//     new_x: usize,
-//     new_y: usize,
-// ) {
-//     grid[xy_to_index(new_x, new_y)] = Some(particle.id);
-//     grid[xy_to_index(particle.x(), particle.y())] = None;
-//     particle.move_to(new_x, new_y);
-// }
-
-// fn get_id_by_xy(grid: &Vec<Option<usize>>, x: usize, y: usize) -> Option<usize> {
-//     grid[xy_to_index(x, y)]
-// }
 
 fn initialize_empty_world() -> Vec<Particle> {
     let mut particle_grid: Vec<Particle> = vec![];
@@ -280,7 +255,7 @@ fn draw_all_particles(particle_grid: &mut Vec<Particle>) {
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
-fn handle_input(settings: &mut Settings, particle_grid: &mut Vec<Particle>) {
+fn handle_input(settings: &mut Settings, particle_grid: &mut Vec<Particle>, rng: &mut ThreadRng) {
     // Function to calculate the coordinates of the placement brush
     fn calculate_brush(brush_size: f32) -> (usize, usize, usize, usize) {
         let (px, py) = mouse_position();
@@ -345,10 +320,10 @@ fn handle_input(settings: &mut Settings, particle_grid: &mut Vec<Particle>) {
         println!("({}, {}): {:?}", x, y, p);
     }
 
-    // if is_key_pressed(KeyCode::A) && settings.paused {
-    //     draw_all_particles(&particle_dict);
-    //     update_all_particles(particle_grid, particle_dict, id_list);
-    // }
+    if is_key_pressed(KeyCode::A) && settings.paused {
+        draw_all_particles(particle_grid);
+        update_all_particles(particle_grid, rng);
+    }
 
     if is_key_pressed(KeyCode::Space) {
         settings.paused = !settings.paused;
@@ -357,6 +332,10 @@ fn handle_input(settings: &mut Settings, particle_grid: &mut Vec<Particle>) {
         } else {
             println!("UNPAUSING");
         }
+    }
+
+    if is_key_pressed(KeyCode::R) {
+        *particle_grid = initialize_empty_world();
     }
 
     if is_key_pressed(KeyCode::H) {

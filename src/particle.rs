@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ParticleType {
     Empty = 0,
     Border = 1,
@@ -11,9 +11,6 @@ pub enum ParticleType {
 #[derive(Debug, Clone, Copy)]
 pub struct Particle {
     pub particle_type: ParticleType,
-    // pub id: usize,
-    // x: usize,
-    // y: usize,
     color: Color,
     pub moved: bool,
 }
