@@ -1,4 +1,4 @@
-use ::rand::random;
+use ::rand::{random, seq::SliceRandom, thread_rng};
 use color_eyre::eyre::Result;
 use macroquad::prelude::*;
 use std::{
@@ -12,8 +12,8 @@ use particle::*;
 mod particle;
 // mod world;
 
-const GRID_WIDTH: usize = 400;
-const GRID_HEIGHT: usize = 400;
+const GRID_WIDTH: usize = 200;
+const GRID_HEIGHT: usize = 200;
 const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 4.0;
 
@@ -46,6 +46,8 @@ struct Settings {
 #[macroquad::main(window_conf)]
 async fn main() -> Result<()> {
     // color_eyre::install()?;
+
+    let mut rng = thread_rng();
 
     println!("Window height: {}", screen_height());
     println!("Window width: {}", screen_width());
@@ -103,50 +105,50 @@ async fn main() -> Result<()> {
 
             // ─── Update All Particles ────────────────────────────────────
             if !settings.paused {
-                // update_all_particles(&mut particle_grid, &mut particle_dict, &mut id_list);
-                for x in (1..GRID_WIDTH - 1) {
-                    for y in 1..GRID_HEIGHT - 1 {
-                        let particle = particle_grid[xy_to_index(x, y)];
+                let mut idx_range: Vec<usize> =
+                    ((GRID_WIDTH + 1)..((GRID_WIDTH - 1) * (GRID_HEIGHT - 1))).collect();
+                idx_range.shuffle(&mut rng);
+                for idx in idx_range.iter() {
+                    let (x, y) = index_to_xy(*idx);
+                    let particle = particle_grid[xy_to_index(x, y)];
 
-                        if !particle.moved {
-                            match particle.particle_type {
-                                ParticleType::Sand => {
-                                    let r = random();
-                                    let right: isize = if r { -1 } else { 1 };
-                                    let check_directions = [(0, 1), (right, 1), (0 - right, 1)];
-                                    // let check_directions = [(0, 1)];
+                    if !particle.moved {
+                        match particle.particle_type {
+                            ParticleType::Sand => {
+                                let r = random();
+                                let right: isize = if r { -1 } else { 1 };
+                                let check_directions = [(0, 1), (right, 1), (0 - right, 1)];
 
-                                    for (dx, dy) in check_directions.iter() {
-                                        // println!("dx = {}, dy = {}", dx, dy);
-                                        // println!("x = {}, y = {}", x, y);
-                                        // let (dx, dy) = (0, 1);
-                                        let (other_x, other_y) =
-                                            ((x as isize + dx) as usize, y + dy);
-                                        // println!("other_x = {}, other_y = {}", other_x, other_y);
-                                        let other = particle_grid[xy_to_index(other_x, other_y)]
-                                            .particle_type;
+                                for (dx, dy) in check_directions.iter() {
+                                    let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
+                                    let other =
+                                        particle_grid[xy_to_index(other_x, other_y)].particle_type;
 
-                                        match other {
-                                            ParticleType::Empty => {
-                                                particle_grid[xy_to_index(x, y)].moved = true;
-                                                (
-                                                    particle_grid[xy_to_index(x, y)],
-                                                    particle_grid[xy_to_index(other_x, other_y)],
-                                                ) = (
-                                                    particle_grid[xy_to_index(other_x, other_y)],
-                                                    particle_grid[xy_to_index(x, y)],
-                                                );
-                                                break;
-                                            }
-                                            _ => {}
+                                    match other {
+                                        ParticleType::Empty => {
+                                            particle_grid[xy_to_index(x, y)].moved = true;
+                                            (
+                                                particle_grid[xy_to_index(x, y)],
+                                                particle_grid[xy_to_index(other_x, other_y)],
+                                            ) = (
+                                                particle_grid[xy_to_index(other_x, other_y)],
+                                                particle_grid[xy_to_index(x, y)],
+                                            );
+                                            break;
                                         }
+                                        _ => {}
                                     }
                                 }
-                                _ => {}
                             }
+                            _ => {}
                         }
                     }
                 }
+                // for x in 1..GRID_WIDTH - 1 {
+                //     for y in 1..GRID_HEIGHT - 1 {
+
+                //     }
+                // }
             }
             // ─────────────────────────────────────────────────────────────
         }

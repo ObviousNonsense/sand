@@ -47,14 +47,14 @@ impl Particle {
             PIXELS_PER_PARTICLE,
             self.color,
         );
-        draw_rectangle_lines(
-            xpt,
-            ypt,
-            PIXELS_PER_PARTICLE,
-            PIXELS_PER_PARTICLE,
-            2.0,
-            BLACK,
-        );
+        // draw_rectangle_lines(
+        //     xpt,
+        //     ypt,
+        //     PIXELS_PER_PARTICLE,
+        //     PIXELS_PER_PARTICLE,
+        //     2.0,
+        //     BLACK,
+        // );
     }
 
     // pub fn move_to(&mut self, x: usize, y: usize) {
