@@ -2,48 +2,34 @@ use super::*;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ParticleType {
-    Sand,
-    Water,
-    Concrete,
+    Empty = 0,
+    Border = 1,
+    Sand = 2,
 }
 
-#[derive(Debug)]
-struct LiquidProperties {
-    moving_right: bool,
-}
-
-// #[derive(Clone)]
-#[derive(Debug)]
+// #[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Particle {
     pub particle_type: ParticleType,
-    pub id: usize,
-    x: usize,
-    y: usize,
+    // pub id: usize,
+    // x: usize,
+    // y: usize,
     color: Color,
-    liquid_properties: Option<LiquidProperties>,
+    pub moved: bool,
 }
 
 impl Particle {
-    pub fn new(x: usize, y: usize, particle_type: ParticleType, id: usize) -> Self {
+    pub fn new(particle_type: ParticleType) -> Self {
         let color = match particle_type {
-            ParticleType::Water => BLUE,
+            ParticleType::Empty => BLACK,
             ParticleType::Sand => YELLOW,
-            ParticleType::Concrete => GRAY,
-        };
-        let liquid_properties: Option<LiquidProperties> = match particle_type {
-            ParticleType::Water => Some(LiquidProperties {
-                moving_right: random(),
-            }),
-            _ => None,
+            ParticleType::Border => GRAY,
         };
 
         Self {
             particle_type,
-            id,
-            x,
-            y,
             color,
-            liquid_properties,
+            moved: false,
         }
     }
 
@@ -51,17 +37,9 @@ impl Particle {
     //     self.position
     // }
 
-    pub fn x(&self) -> usize {
-        self.x
-    }
-
-    pub fn y(&self) -> usize {
-        self.y
-    }
-
-    pub fn draw(&self) {
-        let xpt = PIXELS_PER_PARTICLE * self.x as f32;
-        let ypt = PIXELS_PER_PARTICLE * self.y as f32;
+    pub fn draw(&self, x: usize, y: usize) {
+        let xpt = PIXELS_PER_PARTICLE * x as f32;
+        let ypt = PIXELS_PER_PARTICLE * y as f32;
         draw_rectangle(
             xpt,
             ypt,
@@ -69,20 +47,20 @@ impl Particle {
             PIXELS_PER_PARTICLE,
             self.color,
         );
-        // draw_rectangle_lines(
-        //     xpt,
-        //     ypt,
-        //     PIXELS_PER_PARTICLE,
-        //     PIXELS_PER_PARTICLE,
-        //     2.0,
-        //     BLACK,
-        // );
+        draw_rectangle_lines(
+            xpt,
+            ypt,
+            PIXELS_PER_PARTICLE,
+            PIXELS_PER_PARTICLE,
+            2.0,
+            BLACK,
+        );
     }
 
-    pub fn move_to(&mut self, x: usize, y: usize) {
-        self.x = x;
-        self.y = y;
-    }
+    // pub fn move_to(&mut self, x: usize, y: usize) {
+    //     self.x = x;
+    //     self.y = y;
+    // }
 }
 
 // use std::{
