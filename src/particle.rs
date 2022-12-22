@@ -1,5 +1,3 @@
-use color_eyre::owo_colors::colors::xterm::Blue;
-
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -10,12 +8,23 @@ pub enum ParticleType {
     Water = 3,
 }
 
+// #[repr(usize)]
+// pub enum SandProperties {
+//     Moved = 0,
+// }
+
+// #[repr(usize)]
+// pub enum WaterProperties {
+//     MovingRight = 1,
+// }
+
 // #[derive(Debug)]
 #[derive(Debug, Clone, Copy)]
 pub struct Particle {
     pub particle_type: ParticleType,
     color: Color,
     pub moved: bool,
+    pub bool_state: [bool; 2],
 }
 
 impl Particle {
@@ -27,10 +36,13 @@ impl Particle {
             ParticleType::Water => BLUE,
         };
 
+        let bool_state = [false, false];
+
         Self {
             particle_type,
             color,
             moved: false,
+            bool_state,
         }
     }
 

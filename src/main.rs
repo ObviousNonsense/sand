@@ -169,20 +169,22 @@ impl World {
                     ParticleType::Water => {
                         let r = random();
                         let right: isize = if r { -1 } else { 1 };
-                        let check_directions = [
-                            (0, 1),
-                            (right, 1),
-                            (0 - right, 1),
-                            (right, 0),
-                            (0 - right, 0),
-                        ];
+                        let check_directions = if particle.bool_state[1] {
+                            [(0, 1), (right, 1), (0 - right, 1), (1, 0), (-1, 0)]
+                        } else {
+                            [(0, 1), (right, 1), (0 - right, 1), (-1, 0), (1, 0)]
+                        };
 
-                        for (dx, dy) in check_directions.iter() {
+                        for ((dx, dy), k) in check_directions.iter().zip(0..5) {
                             let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
                             let other_type = self.grid[xy_to_index(other_x, other_y)].particle_type;
 
                             match other_type {
                                 ParticleType::Empty => {
+                                    if k == 4 {
+                                        self.grid[idx].bool_state[1] =
+                                            !self.grid[idx].bool_state[1];
+                                    }
                                     self.grid[idx].moved = true;
                                     (self.grid[idx], self.grid[xy_to_index(other_x, other_y)]) =
                                         (self.grid[xy_to_index(other_x, other_y)], self.grid[idx]);
