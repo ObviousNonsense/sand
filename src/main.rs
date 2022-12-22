@@ -134,7 +134,7 @@ impl World {
     }
 
     fn update_all_particles(&mut self, rng: &mut ThreadRng) {
-        let mut idx_range: Vec<usize> = ((GRID_WIDTH + 1)..((GRID_WIDTH - 1) * (GRID_HEIGHT - 1)))
+        let mut idx_range: Vec<usize> = ((GRID_WIDTH + 1)..(GRID_WIDTH * GRID_HEIGHT - 2))
             .rev()
             .collect();
         idx_range.shuffle(rng);
@@ -149,6 +149,33 @@ impl World {
                         let r = random();
                         let right: isize = if r { -1 } else { 1 };
                         let check_directions = [(0, 1), (right, 1), (0 - right, 1)];
+
+                        for (dx, dy) in check_directions.iter() {
+                            let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
+                            let other_type = self.grid[xy_to_index(other_x, other_y)].particle_type;
+
+                            match other_type {
+                                ParticleType::Empty => {
+                                    self.grid[idx].moved = true;
+                                    (self.grid[idx], self.grid[xy_to_index(other_x, other_y)]) =
+                                        (self.grid[xy_to_index(other_x, other_y)], self.grid[idx]);
+
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    ParticleType::Water => {
+                        let r = random();
+                        let right: isize = if r { -1 } else { 1 };
+                        let check_directions = [
+                            (0, 1),
+                            (right, 1),
+                            (0 - right, 1),
+                            (right, 0),
+                            (0 - right, 0),
+                        ];
 
                         for (dx, dy) in check_directions.iter() {
                             let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
@@ -207,13 +234,13 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
         (mousex_min, mousex_max, mousey_min, mousey_max)
     }
 
-    // if is_key_pressed(KeyCode::Key1) {
-    //     settings.placement_type = ParticleType::Sand;
-    //     println!("Placement Type: Sand")
-    // } else if is_key_pressed(KeyCode::Key2) {
-    //     settings.placement_type = ParticleType::Water;
-    //     println!("Placement Type: Water")
-    // }
+    if is_key_pressed(KeyCode::Key1) {
+        settings.placement_type = ParticleType::Sand;
+        println!("Placement Type: Sand")
+    } else if is_key_pressed(KeyCode::Key2) {
+        settings.placement_type = ParticleType::Water;
+        println!("Placement Type: Water")
+    }
 
     // Add particles on left click
     if is_mouse_button_down(MouseButton::Left) {
@@ -247,11 +274,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     }
 
     if is_mouse_button_pressed(MouseButton::Right) {
-        let (px, py) = mouse_position();
-        let mousex = px / PIXELS_PER_PARTICLE;
-        let mousey = py / PIXELS_PER_PARTICLE;
-        let x = mousex as usize;
-        let y = mousey as usize;
+        let (x, _, y, _) = calculate_brush(1.0);
 
         let p = world.grid[xy_to_index(x, y)];
         println!("({}, {}): {:?}", x, y, p);

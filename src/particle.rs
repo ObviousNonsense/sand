@@ -1,3 +1,5 @@
+use color_eyre::owo_colors::colors::xterm::Blue;
+
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -5,6 +7,7 @@ pub enum ParticleType {
     Empty = 0,
     Border = 1,
     Sand = 2,
+    Water = 3,
 }
 
 // #[derive(Debug)]
@@ -21,6 +24,7 @@ impl Particle {
             ParticleType::Empty => BLACK,
             ParticleType::Sand => YELLOW,
             ParticleType::Border => GRAY,
+            ParticleType::Water => BLUE,
         };
 
         Self {
