@@ -1,21 +1,15 @@
 use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng};
 use color_eyre::eyre::Result;
 use macroquad::prelude::*;
-use std::{
-    collections::{HashMap, HashSet},
-    ops::RangeFrom,
-};
-// use std::rc::{Rc, Weak};
-// use world::World;
 use particle::*;
 
 mod particle;
 // mod world;
 
-const GRID_WIDTH: usize = 200;
-const GRID_HEIGHT: usize = 200;
+const GRID_WIDTH: usize = 90;
+const GRID_HEIGHT: usize = 100;
 const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
-const PIXELS_PER_PARTICLE: f32 = 4.0;
+const PIXELS_PER_PARTICLE: f32 = 5.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
@@ -25,10 +19,8 @@ const LIMIT_UPDATE_RATE: bool = false;
 fn window_conf() -> Conf {
     Conf {
         window_title: "Sand".to_owned(),
-        window_height: GRID_HEIGHT as i32 * PIXELS_PER_PARTICLE as i32,
-        window_width: GRID_WIDTH as i32 * PIXELS_PER_PARTICLE as i32,
         window_resizable: false,
-        high_dpi: false,
+        high_dpi: true,
         sample_count: 0,
         ..Default::default()
     }
@@ -47,10 +39,12 @@ struct Settings {
 async fn main() -> Result<()> {
     // color_eyre::install()?;
 
-    let mut rng = thread_rng();
+    request_new_screen_size(
+        GRID_WIDTH as f32 * PIXELS_PER_PARTICLE,
+        GRID_HEIGHT as f32 * PIXELS_PER_PARTICLE,
+    );
 
-    println!("Window height: {}", screen_height());
-    println!("Window width: {}", screen_width());
+    let mut rng = thread_rng();
 
     // Initialize Grid
     let mut world = World::new();
@@ -71,7 +65,7 @@ async fn main() -> Result<()> {
         let frame_time = get_time() - tic;
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
-        clear_background(BLACK);
+        // clear_background(BLACK);
         world.draw_and_reset_all_particles();
         // ─────────────────────────────────────────────────────────────────────────
 
@@ -116,8 +110,8 @@ impl World {
     fn new() -> Self {
         let mut grid: Vec<Particle> = vec![];
 
-        for x in 0..GRID_WIDTH {
-            for y in 0..GRID_HEIGHT {
+        for y in 0..GRID_HEIGHT {
+            for x in 0..GRID_WIDTH {
                 if x == 0 || x == GRID_WIDTH - 1 || y == 0 || y == GRID_HEIGHT - 1 {
                     // println!("x: {:?}, y: {:?}", x, y);
                     grid.push(Particle::new(ParticleType::Border));
