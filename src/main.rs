@@ -6,10 +6,10 @@ use particle::*;
 mod particle;
 // mod world;
 
-const GRID_WIDTH: usize = 90;
-const GRID_HEIGHT: usize = 100;
+const GRID_WIDTH: usize = 200;
+const GRID_HEIGHT: usize = 200;
 const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
-const PIXELS_PER_PARTICLE: f32 = 5.0;
+const PIXELS_PER_PARTICLE: f32 = 3.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
@@ -124,12 +124,19 @@ impl World {
     }
 
     fn add_new_particle(&mut self, new_particle_type: ParticleType, x: usize, y: usize) {
-        let old_particle_type = self.grid[xy_to_index(x, y)].particle_type;
-        match old_particle_type {
+        match new_particle_type {
             ParticleType::Empty => {
                 self.grid[xy_to_index(x, y)] = Particle::new(new_particle_type);
             }
-            _ => {}
+            _ => {
+                let old_particle_type = self.grid[xy_to_index(x, y)].particle_type;
+                match old_particle_type {
+                    ParticleType::Empty => {
+                        self.grid[xy_to_index(x, y)] = Particle::new(new_particle_type);
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -242,6 +249,12 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     } else if is_key_pressed(KeyCode::Key2) {
         settings.placement_type = ParticleType::Water;
         println!("Placement Type: Water")
+    } else if is_key_pressed(KeyCode::Key3) {
+        settings.placement_type = ParticleType::Concrete;
+        println!("Placement Type: Concrete")
+    } else if is_key_pressed(KeyCode::Key0) {
+        settings.placement_type = ParticleType::Empty;
+        println!("Placement Type: Empty")
     }
 
     // Add particles on left click

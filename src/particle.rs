@@ -1,11 +1,13 @@
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(usize)]
 pub enum ParticleType {
     Empty = 0,
     Border = 1,
     Sand = 2,
     Water = 3,
+    Concrete = 4,
 }
 
 // #[repr(usize)]
@@ -31,8 +33,9 @@ impl Particle {
     pub fn new(particle_type: ParticleType) -> Self {
         let color = match particle_type {
             ParticleType::Empty => BLACK,
-            ParticleType::Sand => YELLOW,
             ParticleType::Border => GRAY,
+            ParticleType::Concrete => GRAY,
+            ParticleType::Sand => YELLOW,
             ParticleType::Water => BLUE,
         };
 
