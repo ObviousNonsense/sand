@@ -6,10 +6,10 @@ use particle::*;
 mod particle;
 // mod world;
 
-const GRID_WIDTH: usize = 200;
-const GRID_HEIGHT: usize = 200;
+const GRID_WIDTH: usize = 75;
+const GRID_HEIGHT: usize = 100;
 const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
-const PIXELS_PER_PARTICLE: f32 = 3.0;
+const PIXELS_PER_PARTICLE: f32 = 4.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
@@ -20,8 +20,10 @@ fn window_conf() -> Conf {
     Conf {
         window_title: "Sand".to_owned(),
         window_resizable: false,
-        high_dpi: true,
+        high_dpi: false,
         sample_count: 0,
+        window_width: (GRID_WIDTH as f32 * PIXELS_PER_PARTICLE) as i32,
+        window_height: (GRID_HEIGHT as f32 * PIXELS_PER_PARTICLE) as i32,
         ..Default::default()
     }
 }
@@ -39,10 +41,10 @@ struct Settings {
 async fn main() -> Result<()> {
     // color_eyre::install()?;
 
-    request_new_screen_size(
-        GRID_WIDTH as f32 * PIXELS_PER_PARTICLE,
-        GRID_HEIGHT as f32 * PIXELS_PER_PARTICLE,
-    );
+    // request_new_screen_size(
+    //     GRID_WIDTH as f32 * PIXELS_PER_PARTICLE,
+    //     GRID_HEIGHT as f32 * PIXELS_PER_PARTICLE,
+    // );
 
     let mut rng = thread_rng();
 
@@ -86,6 +88,8 @@ async fn main() -> Result<()> {
                 if settings.display_fps {
                     println!("{:.2}", fps);
                 }
+
+                println!("width = {}, height = {}", screen_width(), screen_height());
             }
             // ─────────────────────────────────────────────────────────────
 
@@ -162,8 +166,9 @@ impl World {
                             let other_type = self.grid[xy_to_index(other_x, other_y)].particle_type;
 
                             match other_type {
-                                ParticleType::Empty => {
+                                ParticleType::Empty | ParticleType::Water => {
                                     self.grid[idx].moved = true;
+                                    self.grid[xy_to_index(other_x, other_y)].moved = true;
                                     (self.grid[idx], self.grid[xy_to_index(other_x, other_y)]) =
                                         (self.grid[xy_to_index(other_x, other_y)], self.grid[idx]);
 
