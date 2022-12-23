@@ -6,9 +6,9 @@ use particle::*;
 mod particle;
 // mod world;
 
-const GRID_WIDTH: usize = 75;
-const GRID_HEIGHT: usize = 100;
-const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
+const GRID_WIDTH_: usize = 75;
+const GRID_HEIGHT_: usize = 100;
+// const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 4.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
@@ -22,8 +22,8 @@ fn window_conf() -> Conf {
         window_resizable: false,
         high_dpi: false,
         sample_count: 0,
-        window_width: (GRID_WIDTH as f32 * PIXELS_PER_PARTICLE) as i32,
-        window_height: (GRID_HEIGHT as f32 * PIXELS_PER_PARTICLE) as i32,
+        window_width: (GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE) as i32,
+        window_height: (GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE) as i32,
         ..Default::default()
     }
 }
@@ -41,6 +41,7 @@ struct Settings {
 async fn main() -> Result<()> {
     // color_eyre::install()?;
 
+    // Something wrong with this on Mac for some reason
     // request_new_screen_size(
     //     GRID_WIDTH as f32 * PIXELS_PER_PARTICLE,
     //     GRID_HEIGHT as f32 * PIXELS_PER_PARTICLE,
@@ -49,7 +50,7 @@ async fn main() -> Result<()> {
     let mut rng = thread_rng();
 
     // Initialize Grid
-    let mut world = World::new();
+    let mut world = World::new(GRID_WIDTH_, GRID_HEIGHT_);
 
     let mut tic = get_time();
     let mut fps_counter = 0.0;
@@ -108,15 +109,17 @@ async fn main() -> Result<()> {
 // ─── Grid Functions ────────────────────────────────────────────────────────────────────────── ✣ ─
 struct World {
     grid: Vec<Particle>,
+    width: usize,
+    height: usize,
 }
 
 impl World {
-    fn new() -> Self {
+    fn new(width: usize, height: usize) -> Self {
         let mut grid: Vec<Particle> = vec![];
 
-        for y in 0..GRID_HEIGHT {
-            for x in 0..GRID_WIDTH {
-                if x == 0 || x == GRID_WIDTH - 1 || y == 0 || y == GRID_HEIGHT - 1 {
+        for y in 0..height {
+            for x in 0..width {
+                if x == 0 || x == width - 1 || y == 0 || y == height - 1 {
                     // println!("x: {:?}, y: {:?}", x, y);
                     grid.push(Particle::new(ParticleType::Border));
                 } else {
@@ -124,19 +127,25 @@ impl World {
                 }
             }
         }
-        Self { grid }
+        Self {
+            grid,
+            width,
+            height,
+        }
     }
 
     fn add_new_particle(&mut self, new_particle_type: ParticleType, x: usize, y: usize) {
         match new_particle_type {
             ParticleType::Empty => {
-                self.grid[xy_to_index(x, y)] = Particle::new(new_particle_type);
+                let idx = self.xy_to_index(x, y);
+                self.grid[idx] = Particle::new(new_particle_type);
             }
             _ => {
-                let old_particle_type = self.grid[xy_to_index(x, y)].particle_type;
+                let old_particle_type = self.grid[self.xy_to_index(x, y)].particle_type;
                 match old_particle_type {
                     ParticleType::Empty => {
-                        self.grid[xy_to_index(x, y)] = Particle::new(new_particle_type);
+                        let idx = self.xy_to_index(x, y);
+                        self.grid[idx] = Particle::new(new_particle_type);
                     }
                     _ => {}
                 }
@@ -145,13 +154,13 @@ impl World {
     }
 
     fn update_all_particles(&mut self, rng: &mut ThreadRng) {
-        let mut idx_range: Vec<usize> = ((GRID_WIDTH + 1)..(GRID_WIDTH * GRID_HEIGHT - 2))
+        let mut idx_range: Vec<usize> = ((self.width + 1)..(self.width * self.height - 2))
             .rev()
             .collect();
         idx_range.shuffle(rng);
         for idx in idx_range.iter() {
             let idx = *idx;
-            let (x, y) = index_to_xy(idx);
+            let (x, y) = self.index_to_xy(idx);
             let particle = self.grid[idx];
 
             if !particle.moved {
@@ -163,14 +172,16 @@ impl World {
 
                         for (dx, dy) in check_directions.iter() {
                             let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
-                            let other_type = self.grid[xy_to_index(other_x, other_y)].particle_type;
+                            let other_type =
+                                self.grid[self.xy_to_index(other_x, other_y)].particle_type;
 
                             match other_type {
                                 ParticleType::Empty | ParticleType::Water => {
                                     self.grid[idx].moved = true;
-                                    self.grid[xy_to_index(other_x, other_y)].moved = true;
-                                    (self.grid[idx], self.grid[xy_to_index(other_x, other_y)]) =
-                                        (self.grid[xy_to_index(other_x, other_y)], self.grid[idx]);
+                                    let other_idx = self.xy_to_index(other_x, other_y);
+                                    self.grid[other_idx].moved = true;
+                                    (self.grid[idx], self.grid[other_idx]) =
+                                        (self.grid[other_idx], self.grid[idx]);
 
                                     break;
                                 }
@@ -189,7 +200,8 @@ impl World {
 
                         for ((dx, dy), k) in check_directions.iter().zip(0..5) {
                             let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
-                            let other_type = self.grid[xy_to_index(other_x, other_y)].particle_type;
+                            let other_type =
+                                self.grid[self.xy_to_index(other_x, other_y)].particle_type;
 
                             match other_type {
                                 ParticleType::Empty => {
@@ -198,8 +210,9 @@ impl World {
                                             !self.grid[idx].bool_state[1];
                                     }
                                     self.grid[idx].moved = true;
-                                    (self.grid[idx], self.grid[xy_to_index(other_x, other_y)]) =
-                                        (self.grid[xy_to_index(other_x, other_y)], self.grid[idx]);
+                                    let other_idx = self.xy_to_index(other_x, other_y);
+                                    (self.grid[idx], self.grid[other_idx]) =
+                                        (self.grid[other_idx], self.grid[idx]);
 
                                     break;
                                 }
@@ -214,39 +227,44 @@ impl World {
     }
 
     fn draw_and_reset_all_particles(&mut self) {
-        for x in 0..GRID_WIDTH {
-            for y in 0..GRID_HEIGHT {
-                self.grid[xy_to_index(x, y)].draw(x, y);
-                self.grid[xy_to_index(x, y)].moved = false;
+        for x in 0..self.width {
+            for y in 0..self.height {
+                let idx = self.xy_to_index(x, y);
+                self.grid[idx].draw(x, y);
+                self.grid[idx].moved = false;
             }
         }
     }
+
+    fn xy_to_index(&self, x: usize, y: usize) -> usize {
+        y * self.width + x
+    }
+
+    fn index_to_xy(&self, i: usize) -> (usize, usize) {
+        (i % self.width, i / self.width)
+    }
 }
 
-fn xy_to_index(x: usize, y: usize) -> usize {
-    y * GRID_WIDTH + x
-}
-
-fn index_to_xy(i: usize) -> (usize, usize) {
-    (i % GRID_WIDTH, i / GRID_WIDTH)
-}
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
 fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng) {
+    let grid_width = world.width;
+    let grid_height = world.height;
+
     // Function to calculate the coordinates of the placement brush
-    fn calculate_brush(brush_size: f32) -> (usize, usize, usize, usize) {
+    let calculate_brush = |brush_size: f32| -> (usize, usize, usize, usize) {
         let (px, py) = mouse_position();
         let mousex = px / PIXELS_PER_PARTICLE;
         let mousey = py / PIXELS_PER_PARTICLE;
         let brush_span = brush_size / 2.0;
-        let mousex_min = (mousex - brush_span).clamp(0., GRID_WIDTH as f32) as usize;
-        let mousex_max = (mousex + brush_span).clamp(0., GRID_WIDTH as f32) as usize;
-        let mousey_min = (mousey - brush_span).clamp(0., GRID_HEIGHT as f32) as usize;
-        let mousey_max = (mousey + brush_span).clamp(0., GRID_HEIGHT as f32) as usize;
+        let mousex_min = (mousex - brush_span).clamp(0., grid_width as f32) as usize;
+        let mousex_max = (mousex + brush_span).clamp(0., grid_width as f32) as usize;
+        let mousey_min = (mousey - brush_span).clamp(0., grid_height as f32) as usize;
+        let mousey_max = (mousey + brush_span).clamp(0., grid_height as f32) as usize;
 
         (mousex_min, mousex_max, mousey_min, mousey_max)
-    }
+    };
 
     if is_key_pressed(KeyCode::Key1) {
         settings.placement_type = ParticleType::Sand;
@@ -269,11 +287,11 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
         // println!("Brush span = {}", brush_span);
         for x in mousex_min..mousex_max {
             // println!("x = {}", x);
-            if x >= GRID_WIDTH {
+            if x >= world.width {
                 continue;
             }
             for y in mousey_min..mousey_max {
-                if y >= GRID_HEIGHT {
+                if y >= world.height {
                     continue;
                 }
                 world.add_new_particle(settings.placement_type, x, y);
@@ -296,7 +314,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     if is_mouse_button_pressed(MouseButton::Right) {
         let (x, _, y, _) = calculate_brush(1.0);
 
-        let p = world.grid[xy_to_index(x, y)];
+        let p = world.grid[world.xy_to_index(x, y)];
         println!("({}, {}): {:?}", x, y, p);
     }
 
@@ -315,7 +333,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     }
 
     if is_key_pressed(KeyCode::R) {
-        *world = World::new();
+        *world = World::new(world.width, world.height);
     }
 
     if is_key_pressed(KeyCode::H) {
@@ -327,7 +345,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
         settings.brush_size += mouse_wheel_y.signum();
         settings.brush_size = settings
             .brush_size
-            .clamp(1.0, usize::max(GRID_WIDTH, GRID_HEIGHT) as f32);
+            .clamp(1.0, usize::max(world.width, world.height) as f32);
         // println!("Brush size: {}", brush_size);
     }
 
