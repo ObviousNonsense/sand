@@ -24,7 +24,7 @@ pub enum ParticleType {
 #[derive(Debug, Clone, Copy)]
 pub struct Particle {
     pub particle_type: ParticleType,
-    color: Color,
+    pub color: Color,
     pub moved: bool,
     pub bool_state: [bool; 2],
 }
@@ -49,27 +49,9 @@ impl Particle {
         }
     }
 
-    // pub fn position(&self) -> (usize, usize) {
-    //     self.position
-    // }
-
     pub fn draw(&self, x: usize, y: usize) {
-        let xpt = PIXELS_PER_PARTICLE * x as f32;
-        let ypt = PIXELS_PER_PARTICLE * y as f32;
-        draw_rectangle(
-            xpt,
-            ypt,
-            PIXELS_PER_PARTICLE,
-            PIXELS_PER_PARTICLE,
-            self.color,
-        );
-        // draw_rectangle_lines(
-        //     xpt,
-        //     ypt,
-        //     PIXELS_PER_PARTICLE,
-        //     PIXELS_PER_PARTICLE,
-        //     1.0,
-        //     BLACK,
-        // );
+        let px = PIXELS_PER_PARTICLE * x as f32;
+        let py = PIXELS_PER_PARTICLE * y as f32;
+        draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, self.color);
     }
 }

@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
                     println!("{:.2}", fps);
                 }
 
-                println!("width = {}, height = {}", screen_width(), screen_height());
+                // println!("width = {}, height = {}", screen_width(), screen_height());
             }
             // ─────────────────────────────────────────────────────────────
 
@@ -177,12 +177,7 @@ impl World {
 
                             match other_type {
                                 ParticleType::Empty | ParticleType::Water => {
-                                    self.grid[idx].moved = true;
-                                    let other_idx = self.xy_to_index(other_x, other_y);
-                                    self.grid[other_idx].moved = true;
-                                    (self.grid[idx], self.grid[other_idx]) =
-                                        (self.grid[other_idx], self.grid[idx]);
-
+                                    self.swap_particles(x, y, other_x, other_y);
                                     break;
                                 }
                                 _ => {}
@@ -192,6 +187,7 @@ impl World {
                     ParticleType::Water => {
                         let r = random();
                         let right: isize = if r { -1 } else { 1 };
+                        // let mut moving_right = particle.bool_state[1];
                         let check_directions = if particle.bool_state[1] {
                             [(0, 1), (right, 1), (0 - right, 1), (1, 0), (-1, 0)]
                         } else {
@@ -208,22 +204,28 @@ impl World {
                                     if k == 4 {
                                         self.grid[idx].bool_state[1] =
                                             !self.grid[idx].bool_state[1];
+                                        // moving_right = !moving_right;
                                     }
-                                    self.grid[idx].moved = true;
-                                    let other_idx = self.xy_to_index(other_x, other_y);
-                                    (self.grid[idx], self.grid[other_idx]) =
-                                        (self.grid[other_idx], self.grid[idx]);
-
+                                    self.swap_particles(x, y, other_x, other_y);
                                     break;
                                 }
                                 _ => {}
                             }
                         }
+                        // particle.bool_state[1] = moving_right;
                     }
                     _ => {}
                 }
             }
         }
+    }
+
+    fn swap_particles(&mut self, x1: usize, y1: usize, x2: usize, y2: usize) {
+        let idx1 = self.xy_to_index(x1, y1);
+        let idx2 = self.xy_to_index(x2, y2);
+        self.grid[idx1].moved = true;
+        self.grid[idx2].moved = true;
+        (self.grid[idx1], self.grid[idx2]) = (self.grid[idx2], self.grid[idx1]);
     }
 
     fn draw_and_reset_all_particles(&mut self) {
