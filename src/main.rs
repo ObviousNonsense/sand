@@ -10,6 +10,8 @@ const GRID_WIDTH_: usize = 75;
 const GRID_HEIGHT_: usize = 100;
 // const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 4.0;
+const WORLD_PX0: f32 = 100.0;
+const WORLD_PY0: f32 = 0.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
@@ -22,8 +24,8 @@ fn window_conf() -> Conf {
         window_resizable: false,
         high_dpi: false,
         sample_count: 0,
-        window_width: (GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE) as i32,
-        window_height: (GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE) as i32,
+        window_width: (WORLD_PX0 + GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE) as i32,
+        window_height: (WORLD_PY0 + GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE) as i32,
         ..Default::default()
     }
 }
@@ -246,8 +248,20 @@ impl World {
         (i % self.width, i / self.width)
     }
 }
-
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
+fn pixels_to_xy<T: From<f32>>(px: f32, py: f32) -> (T, T) {
+    (
+        ((px - WORLD_PX0) / PIXELS_PER_PARTICLE).into(),
+        ((py - WORLD_PY0) / PIXELS_PER_PARTICLE).into(),
+    )
+}
+
+fn xy_to_pixels(x: usize, y: usize) -> (f32, f32) {
+    (
+        x as f32 * PIXELS_PER_PARTICLE + WORLD_PX0,
+        y as f32 * PIXELS_PER_PARTICLE + WORLD_PY0,
+    )
+}
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
 fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng) {
@@ -257,8 +271,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     // Function to calculate the coordinates of the placement brush
     let calculate_brush = |brush_size: f32| -> (usize, usize, usize, usize) {
         let (px, py) = mouse_position();
-        let mousex = px / PIXELS_PER_PARTICLE;
-        let mousey = py / PIXELS_PER_PARTICLE;
+        let (mousex, mousey) = pixels_to_xy::<f32>(px, py);
         let brush_span = brush_size / 2.0;
         let mousex_min = (mousex - brush_span).clamp(0., grid_width as f32) as usize;
         let mousex_max = (mousex + brush_span).clamp(0., grid_width as f32) as usize;
@@ -304,13 +317,14 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     // Highlight a box around the brush is highlight_brush is true
     if settings.highlight_brush {
         let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(settings.brush_size);
-        let xpt = mousex_min as f32 * PIXELS_PER_PARTICLE;
-        let ypt = mousey_min as f32 * PIXELS_PER_PARTICLE;
+        let (px_min, py_min) = xy_to_pixels(mousex_min, mousey_min);
+        // let xpt = mousex_min as f32 * PIXELS_PER_PARTICLE;
+        // let ypt = mousey_min as f32 * PIXELS_PER_PARTICLE;
         let sizex = (mousex_max - mousex_min) as f32 * PIXELS_PER_PARTICLE;
         let sizey = (mousey_max - mousey_min) as f32 * PIXELS_PER_PARTICLE;
 
-        draw_rectangle_lines(xpt, ypt, sizex, sizey, 3.0, RED);
-        draw_rectangle(xpt, ypt, sizex, sizey, Color::new(1.0, 1.0, 0.0, 0.2));
+        draw_rectangle_lines(px_min, py_min, sizex, sizey, 3.0, RED);
+        draw_rectangle(px_min, py_min, sizex, sizey, Color::new(1.0, 1.0, 0.0, 0.2));
     }
 
     if is_mouse_button_pressed(MouseButton::Right) {

@@ -50,8 +50,9 @@ impl Particle {
     }
 
     pub fn draw(&self, x: usize, y: usize) {
-        let px = PIXELS_PER_PARTICLE * x as f32;
-        let py = PIXELS_PER_PARTICLE * y as f32;
+        // let px = PIXELS_PER_PARTICLE * x as f32;
+        // let py = PIXELS_PER_PARTICLE * y as f32;
+        let (px, py) = xy_to_pixels(x, y);
         draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, self.color);
     }
 }
