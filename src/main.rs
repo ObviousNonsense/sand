@@ -1,5 +1,6 @@
 use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng};
-use color_eyre::eyre::Result;
+// use color_eyre::eyre::Result;
+use egui_macroquad::{egui::special_emojis, *};
 use macroquad::prelude::*;
 use particle::*;
 
@@ -10,7 +11,7 @@ const GRID_WIDTH_: usize = 75;
 const GRID_HEIGHT_: usize = 100;
 // const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 4.0;
-const WORLD_PX0: f32 = 100.0;
+const WORLD_PX0: f32 = 300.0;
 const WORLD_PY0: f32 = 0.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
@@ -22,7 +23,7 @@ fn window_conf() -> Conf {
     Conf {
         window_title: "Sand".to_owned(),
         window_resizable: false,
-        high_dpi: false,
+        high_dpi: true,
         sample_count: 0,
         window_width: (WORLD_PX0 + GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE) as i32,
         window_height: (WORLD_PY0 + GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE) as i32,
@@ -40,7 +41,7 @@ struct Settings {
 
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────── ✣ ─
 #[macroquad::main(window_conf)]
-async fn main() -> Result<()> {
+async fn main() {
     // color_eyre::install()?;
 
     // Something wrong with this on Mac for some reason
@@ -57,6 +58,7 @@ async fn main() -> Result<()> {
     let mut tic = get_time();
     let mut fps_counter = 0.0;
     let mut frame_time_sum = 0.0;
+    let mut fps = 0.0;
 
     let mut settings = Settings {
         paused: false,
@@ -68,6 +70,62 @@ async fn main() -> Result<()> {
 
     loop {
         let frame_time = get_time() - tic;
+
+        egui_macroquad::ui(|ctx| {
+            egui::Window::new("")
+                .resizable(false)
+                .title_bar(false)
+                .fixed_size([WORLD_PX0 - 13.0, WORLD_PY0])
+                .resizable(false)
+                .anchor(egui::Align2::LEFT_TOP, [0., 0.])
+                .show(ctx, |ui| {
+                    // ui.label("Test");
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.selectable_value(&mut settings.paused, true, "⏸");
+                            ui.selectable_value(&mut settings.paused, false, "▶");
+                            if ui.button("⏭").clicked() && settings.paused {
+                                world.update_all_particles(&mut rng);
+                            }
+                        })
+                    });
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.selectable_value(
+                                &mut settings.placement_type,
+                                ParticleType::Empty,
+                                "Empty",
+                            );
+                            ui.selectable_value(
+                                &mut settings.placement_type,
+                                ParticleType::Sand,
+                                "Sand",
+                            );
+                            ui.selectable_value(
+                                &mut settings.placement_type,
+                                ParticleType::Water,
+                                "Water",
+                            );
+                            ui.selectable_value(
+                                &mut settings.placement_type,
+                                ParticleType::Concrete,
+                                "Concrete",
+                            );
+                        });
+                    });
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Brush Size: ");
+                            ui.add(
+                                egui::Slider::new(&mut settings.brush_size, 1.0..=30.0)
+                                    .step_by(1.0),
+                            );
+                        })
+                    });
+                    ui.label(format!("Framerate: {:.1}", fps));
+                    ui.allocate_space(ui.available_size());
+                });
+        });
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
         // clear_background(BLACK);
@@ -85,7 +143,7 @@ async fn main() -> Result<()> {
             frame_time_sum += frame_time;
 
             if fps_counter >= 50.0 {
-                let fps = 50.0 / frame_time_sum;
+                fps = 50.0 / frame_time_sum;
                 fps_counter = 0.0;
                 frame_time_sum = 0.0;
                 if settings.display_fps {
@@ -102,6 +160,7 @@ async fn main() -> Result<()> {
             }
             // ─────────────────────────────────────────────────────────────
         }
+        egui_macroquad::draw();
         next_frame().await
     }
     // Ok(())
