@@ -1,6 +1,6 @@
 use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng};
 // use color_eyre::eyre::Result;
-use egui_macroquad::{egui::special_emojis, *};
+use egui_macroquad::*;
 use macroquad::prelude::*;
 use particle::*;
 
@@ -71,61 +71,7 @@ async fn main() {
     loop {
         let frame_time = get_time() - tic;
 
-        egui_macroquad::ui(|ctx| {
-            egui::Window::new("")
-                .resizable(false)
-                .title_bar(false)
-                .fixed_size([WORLD_PX0 - 13.0, WORLD_PY0])
-                .resizable(false)
-                .anchor(egui::Align2::LEFT_TOP, [0., 0.])
-                .show(ctx, |ui| {
-                    // ui.label("Test");
-                    ui.group(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.selectable_value(&mut settings.paused, true, "⏸");
-                            ui.selectable_value(&mut settings.paused, false, "▶");
-                            if ui.button("⏭").clicked() && settings.paused {
-                                world.update_all_particles(&mut rng);
-                            }
-                        })
-                    });
-                    ui.group(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.selectable_value(
-                                &mut settings.placement_type,
-                                ParticleType::Empty,
-                                "Empty",
-                            );
-                            ui.selectable_value(
-                                &mut settings.placement_type,
-                                ParticleType::Sand,
-                                "Sand",
-                            );
-                            ui.selectable_value(
-                                &mut settings.placement_type,
-                                ParticleType::Water,
-                                "Water",
-                            );
-                            ui.selectable_value(
-                                &mut settings.placement_type,
-                                ParticleType::Concrete,
-                                "Concrete",
-                            );
-                        });
-                    });
-                    ui.group(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.label("Brush Size: ");
-                            ui.add(
-                                egui::Slider::new(&mut settings.brush_size, 1.0..=30.0)
-                                    .step_by(1.0),
-                            );
-                        })
-                    });
-                    ui.label(format!("Framerate: {:.1}", fps));
-                    ui.allocate_space(ui.available_size());
-                });
-        });
+        egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut rng, &mut world, fps));
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
         // clear_background(BLACK);
@@ -420,4 +366,56 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     if is_key_pressed(KeyCode::F) {
         settings.display_fps = !settings.display_fps;
     }
+}
+
+fn setup_ui(
+    ctx: &egui::Context,
+    settings: &mut Settings,
+    rng: &mut ThreadRng,
+    world: &mut World,
+    fps: f64,
+) {
+    egui::Window::new("")
+        .resizable(false)
+        .title_bar(false)
+        .fixed_size([WORLD_PX0 - 13.0, WORLD_PY0])
+        .resizable(false)
+        .anchor(egui::Align2::LEFT_TOP, [0., 0.])
+        .show(ctx, |ui| {
+            // ui.label("Test");
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut settings.paused, true, "⏸");
+                    ui.selectable_value(&mut settings.paused, false, "▶");
+                    if ui.button("⏭").clicked() && settings.paused {
+                        world.update_all_particles(rng);
+                    }
+                })
+            });
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut settings.placement_type, ParticleType::Empty, "Empty");
+                    ui.selectable_value(&mut settings.placement_type, ParticleType::Sand, "Sand");
+                    ui.selectable_value(&mut settings.placement_type, ParticleType::Water, "Water");
+                    ui.selectable_value(
+                        &mut settings.placement_type,
+                        ParticleType::Concrete,
+                        "Concrete",
+                    );
+                });
+            });
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Brush Size: ");
+                    ui.add(
+                        egui::DragValue::new(&mut settings.brush_size)
+                            .clamp_range(1.0..=30.0)
+                            .fixed_decimals(0)
+                            .speed(0.2),
+                    );
+                })
+            });
+            ui.label(format!("Framerate: {:.1}", fps));
+            ui.allocate_space(ui.available_size());
+        });
 }
