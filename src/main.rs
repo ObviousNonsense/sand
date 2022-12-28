@@ -196,21 +196,14 @@ impl World {
     }
 
     fn add_new_particle(&mut self, new_particle_type: ParticleType, x: usize, y: usize) {
-        match new_particle_type {
-            ParticleType::Empty => {
-                let idx = self.xy_to_index(x, y);
+        let idx = self.xy_to_index(x, y);
+        let old_particle_type = self.grid[idx].particle_type;
+        match (new_particle_type, old_particle_type) {
+            (_, ParticleType::Border) => {}
+            (ParticleType::Empty, _) | (_, ParticleType::Empty) => {
                 self.grid[idx] = Particle::new(new_particle_type);
             }
-            _ => {
-                let old_particle_type = self.grid[self.xy_to_index(x, y)].particle_type;
-                match old_particle_type {
-                    ParticleType::Empty => {
-                        let idx = self.xy_to_index(x, y);
-                        self.grid[idx] = Particle::new(new_particle_type);
-                    }
-                    _ => {}
-                }
-            }
+            _ => {}
         }
     }
 
