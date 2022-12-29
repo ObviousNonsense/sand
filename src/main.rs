@@ -279,6 +279,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
         (mousex_min, mousex_max, mousey_min, mousey_max)
     };
 
+    // Change particle placement type with number keys
     if is_key_pressed(KeyCode::Key1) {
         settings.placement_type = ParticleType::Sand;
         println!("Placement Type: Sand")
@@ -292,7 +293,6 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
         settings.placement_type = ParticleType::Empty;
         println!("Placement Type: Empty")
     }
-
     // Add particles on left click
     if is_mouse_button_down(MouseButton::Left) {
         let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(settings.brush_size);
@@ -311,7 +311,6 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
             }
         }
     }
-
     // Highlight a box around the brush is highlight_brush is true
     if settings.highlight_brush {
         let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(settings.brush_size);
@@ -324,19 +323,18 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
         draw_rectangle_lines(px_min, py_min, sizex, sizey, 3.0, RED);
         draw_rectangle(px_min, py_min, sizex, sizey, Color::new(1.0, 1.0, 0.0, 0.2));
     }
-
+    // Print particle info on right click
     if is_mouse_button_pressed(MouseButton::Right) {
         let (x, _, y, _) = calculate_brush(1.0);
-
         let p = world.grid[world.xy_to_index(x, y)];
         println!("({}, {}): {:?}", x, y, p);
     }
-
+    // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
         world.draw_and_reset_all_particles();
         world.update_all_particles(rng);
     }
-
+    // Pause/Unpause with space
     if is_key_pressed(KeyCode::Space) {
         settings.paused = !settings.paused;
         if settings.paused {
@@ -345,15 +343,20 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
             println!("UNPAUSING");
         }
     }
-
+    // Reset on "R"
     if is_key_pressed(KeyCode::R) {
         *world = World::new(world.width, world.height);
     }
-
+    // Toggle highlighting with "H"
     if is_key_pressed(KeyCode::H) {
         settings.highlight_brush = !settings.highlight_brush;
     }
+    // Display fps in console on "F"
+    if is_key_pressed(KeyCode::F) {
+        settings.display_fps = !settings.display_fps;
+    }
 
+    // Change brush size with mouse wheel
     let (_, mouse_wheel_y) = mouse_wheel();
     if (mouse_wheel_y - 0.0).abs() > 0.000001 {
         settings.brush_size += mouse_wheel_y.signum();
@@ -361,10 +364,6 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
             .brush_size
             .clamp(1.0, usize::max(world.width, world.height) as f32);
         // println!("Brush size: {}", brush_size);
-    }
-
-    if is_key_pressed(KeyCode::F) {
-        settings.display_fps = !settings.display_fps;
     }
 }
 
@@ -413,6 +412,12 @@ fn setup_ui(
                             .fixed_decimals(0)
                             .speed(0.2),
                     );
+                    if ui.button("➕").clicked() {
+                        settings.brush_size += 1.0;
+                    }
+                    if ui.button("➖").clicked() {
+                        settings.brush_size -= 1.0;
+                    }
                 })
             });
             ui.label(format!("Framerate: {:.1}", fps));
