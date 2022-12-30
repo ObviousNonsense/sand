@@ -263,21 +263,8 @@ fn xy_to_pixels(x: usize, y: usize) -> (f32, f32) {
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
 fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng) {
-    let grid_width = world.width;
-    let grid_height = world.height;
-
-    // Function to calculate the coordinates of the placement brush
-    let calculate_brush = |brush_size: f32| -> (usize, usize, usize, usize) {
-        let (px, py) = mouse_position();
-        let (mousex, mousey) = pixels_to_xy::<f32>(px, py);
-        let brush_span = brush_size / 2.0;
-        let mousex_min = (mousex - brush_span).clamp(0., grid_width as f32) as usize;
-        let mousex_max = (mousex + brush_span).clamp(0., grid_width as f32) as usize;
-        let mousey_min = (mousey - brush_span).clamp(0., grid_height as f32) as usize;
-        let mousey_max = (mousey + brush_span).clamp(0., grid_height as f32) as usize;
-
-        (mousex_min, mousex_max, mousey_min, mousey_max)
-    };
+    // let grid_width = world.width;
+    // let grid_height = world.height;
 
     // Change particle placement type with number keys
     if is_key_pressed(KeyCode::Key1) {
@@ -295,7 +282,8 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     }
     // Add particles on left click
     if is_mouse_button_down(MouseButton::Left) {
-        let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(settings.brush_size);
+        let (mousex_min, mousex_max, mousey_min, mousey_max) =
+            calculate_brush(settings.brush_size, world.width, world.height);
 
         // println!("Brush span = {}", brush_span);
         for x in mousex_min..mousex_max {
@@ -313,7 +301,8 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     }
     // Highlight a box around the brush is highlight_brush is true
     if settings.highlight_brush {
-        let (mousex_min, mousex_max, mousey_min, mousey_max) = calculate_brush(settings.brush_size);
+        let (mousex_min, mousex_max, mousey_min, mousey_max) =
+            calculate_brush(settings.brush_size, world.width, world.height);
         let (px_min, py_min) = xy_to_pixels(mousex_min, mousey_min);
         // let xpt = mousex_min as f32 * PIXELS_PER_PARTICLE;
         // let ypt = mousey_min as f32 * PIXELS_PER_PARTICLE;
@@ -325,9 +314,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     }
     // Print particle info on right click
     if is_mouse_button_pressed(MouseButton::Right) {
-        let (x, _, y, _) = calculate_brush(1.0);
-        let p = world.grid[world.xy_to_index(x, y)];
-        println!("({}, {}): {:?}", x, y, p);
+        println!("{}", debug_particle_string(world));
     }
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
@@ -367,6 +354,39 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     }
 }
 
+/// Function to calculate the coordinates of the placement brush
+fn calculate_brush(
+    brush_size: f32,
+    grid_width: usize,
+    grid_height: usize,
+) -> (usize, usize, usize, usize) {
+    let (px, py) = mouse_position();
+    let (mousex, mousey) = pixels_to_xy::<f32>(px, py);
+    let brush_span = brush_size / 2.0;
+    let mousex_min = (mousex - brush_span).clamp(0., grid_width as f32) as usize;
+    let mousex_max = (mousex + brush_span).clamp(0., grid_width as f32) as usize;
+    let mousey_min = (mousey - brush_span).clamp(0., grid_height as f32) as usize;
+    let mousey_max = (mousey + brush_span).clamp(0., grid_height as f32) as usize;
+
+    (mousex_min, mousex_max, mousey_min, mousey_max)
+}
+
+fn mouse_location(grid_width: usize, grid_height: usize) -> (usize, usize) {
+    let (px, py) = mouse_position();
+    let (mousex, mousey) = pixels_to_xy::<f32>(px, py);
+    (
+        mousex.clamp(0., grid_width as f32 - 1.0) as usize,
+        mousey.clamp(0., grid_height as f32 - 1.0) as usize,
+    )
+}
+
+fn debug_particle_string(world: &World) -> String {
+    // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
+    let (x, y) = mouse_location(world.width, world.height);
+    let p = world.grid[world.xy_to_index(x, y)];
+    format!("({}, {}): {:?}", x, y, p)
+}
+
 fn setup_ui(
     ctx: &egui::Context,
     settings: &mut Settings,
@@ -382,14 +402,20 @@ fn setup_ui(
         .anchor(egui::Align2::LEFT_TOP, [0., 0.])
         .show(ctx, |ui| {
             // ui.label("Test");
-            ui.group(|ui| {
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut settings.paused, true, "⏸");
-                    ui.selectable_value(&mut settings.paused, false, "▶");
-                    if ui.button("⏭").clicked() && settings.paused {
-                        world.update_all_particles(rng);
-                    }
-                })
+            ui.horizontal(|ui| {
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(&mut settings.paused, true, "⏸");
+                        ui.selectable_value(&mut settings.paused, false, "▶");
+                        if ui.button("⏭").clicked() && settings.paused {
+                            world.update_all_particles(rng);
+                        }
+                    });
+                });
+                // ui.allocate_space(ui.);
+                ui.group(|ui| {
+                    ui.label(format!("Framerate: {:.1}", fps));
+                });
             });
             ui.group(|ui| {
                 ui.horizontal(|ui| {
@@ -401,6 +427,7 @@ fn setup_ui(
                         ParticleType::Concrete,
                         "Concrete",
                     );
+                    ui.allocate_space(ui.available_size());
                 });
             });
             ui.group(|ui| {
@@ -418,9 +445,12 @@ fn setup_ui(
                     if ui.button("➖").clicked() {
                         settings.brush_size -= 1.0;
                     }
+                    ui.allocate_space(ui.available_size());
                 })
             });
-            ui.label(format!("Framerate: {:.1}", fps));
+            ui.group(|ui| {
+                ui.label(debug_particle_string(world));
+            });
             ui.allocate_space(ui.available_size());
         });
 }
