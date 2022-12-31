@@ -1,11 +1,11 @@
 use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng};
 // use color_eyre::eyre::Result;
+use crate::core::*;
 use egui_macroquad::*;
 use enum_map::{enum_map, Enum, EnumMap};
 use macroquad::prelude::*;
-use particle::*;
 
-mod particle;
+mod core;
 // mod world;
 
 const GRID_WIDTH_: usize = 300;
