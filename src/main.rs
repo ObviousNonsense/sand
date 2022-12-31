@@ -1,22 +1,23 @@
 use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng};
 // use color_eyre::eyre::Result;
 use egui_macroquad::*;
+use enum_map::{enum_map, Enum, EnumMap};
 use macroquad::prelude::*;
 use particle::*;
 
 mod particle;
 // mod world;
 
-const GRID_WIDTH_: usize = 75;
-const GRID_HEIGHT_: usize = 100;
+const GRID_WIDTH_: usize = 200;
+const GRID_HEIGHT_: usize = 200;
 // const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
-const PIXELS_PER_PARTICLE: f32 = 4.0;
+const PIXELS_PER_PARTICLE: f32 = 2.0;
 const WORLD_PX0: f32 = 300.0;
 const WORLD_PY0: f32 = 0.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
-const LIMIT_UPDATE_RATE: bool = false;
+const LIMIT_UPDATE_RATE: bool = true;
 // const BRUSH_SIZE: f32 = 1.0;
 
 fn window_conf() -> Conf {
@@ -69,8 +70,6 @@ async fn main() {
     };
 
     loop {
-        let frame_time = get_time() - tic;
-
         egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut rng, &mut world, fps));
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
@@ -82,9 +81,11 @@ async fn main() {
         handle_input(&mut settings, &mut world, &mut rng);
         // ─────────────────────────────────────────────────────────────────────────
 
+        let time = get_time();
+        let frame_time = time - tic;
         if !LIMIT_UPDATE_RATE || frame_time >= MINIMUM_UPDATE_TIME {
             // ─── Limiting And Printing Fps ───────────────────────────────
-            tic = get_time();
+            tic = time;
             fps_counter += 1.0;
             frame_time_sum += frame_time;
 
@@ -118,6 +119,7 @@ struct World {
     grid: Vec<Particle>,
     width: usize,
     height: usize,
+    base_properties: EnumMap<ParticleType, ParticleTypeProperties>,
 }
 
 impl World {
@@ -134,16 +136,46 @@ impl World {
                 }
             }
         }
+
         Self {
             grid,
             width,
             height,
+            base_properties: enum_map! {
+                ParticleType::Border => ParticleTypeProperties {
+                    base_color: GRAY,
+                    movable: false,
+                    replaceable: false,
+                },
+                ParticleType::Concrete => ParticleTypeProperties {
+                    base_color: GRAY,
+                    movable: false,
+                    replaceable: true,
+                },
+                ParticleType::Empty => ParticleTypeProperties {
+                    base_color: BLACK,
+                    movable: true,
+                    replaceable: true,
+                },
+                ParticleType::Sand => ParticleTypeProperties {
+                    base_color: YELLOW,
+                    movable: true,
+                    replaceable: true,
+                },
+                ParticleType::Water => ParticleTypeProperties {
+                    base_color: BLUE,
+                    movable: true,
+                    replaceable: true,
+                },
+            },
         }
     }
 
     fn add_new_particle(&mut self, new_particle_type: ParticleType, x: usize, y: usize) {
         let idx = self.xy_to_index(x, y);
         let old_particle_type = self.grid[idx].particle_type;
+
+        // TODO add toggle for replace/not replace particles (other than empty & borders)
         match (new_particle_type, old_particle_type) {
             (_, ParticleType::Border) => {}
             (ParticleType::Empty, _) | (_, ParticleType::Empty) => {
@@ -232,7 +264,8 @@ impl World {
         for x in 0..self.width {
             for y in 0..self.height {
                 let idx = self.xy_to_index(x, y);
-                self.grid[idx].draw(x, y);
+                let ptype = self.grid[idx].particle_type;
+                self.grid[idx].draw(x, y, self.base_properties[ptype].base_color);
                 self.grid[idx].moved = false;
             }
         }
@@ -309,8 +342,11 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
         let sizex = (mousex_max - mousex_min) as f32 * PIXELS_PER_PARTICLE;
         let sizey = (mousey_max - mousey_min) as f32 * PIXELS_PER_PARTICLE;
 
-        draw_rectangle_lines(px_min, py_min, sizex, sizey, 3.0, RED);
-        draw_rectangle(px_min, py_min, sizex, sizey, Color::new(1.0, 1.0, 0.0, 0.2));
+        let mut color = world.base_properties[settings.placement_type].base_color;
+        color.a = 0.4;
+
+        // draw_rectangle_lines(px_min, py_min, sizex, sizey, 3.0, RED);
+        draw_rectangle(px_min, py_min, sizex, sizey, color);
     }
     // Print particle info on right click
     if is_mouse_button_pressed(MouseButton::Right) {
@@ -419,7 +455,11 @@ fn setup_ui(
             });
             ui.group(|ui| {
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut settings.placement_type, ParticleType::Empty, "Empty");
+                    ui.selectable_value(
+                        &mut settings.placement_type,
+                        ParticleType::Empty,
+                        "Delete",
+                    );
                     ui.selectable_value(&mut settings.placement_type, ParticleType::Sand, "Sand");
                     ui.selectable_value(&mut settings.placement_type, ParticleType::Water, "Water");
                     ui.selectable_value(
