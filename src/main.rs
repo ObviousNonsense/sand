@@ -114,173 +114,6 @@ async fn main() {
 }
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 
-// ─── Grid Functions ────────────────────────────────────────────────────────────────────────── ✣ ─
-struct World {
-    grid: Vec<Particle>,
-    width: usize,
-    height: usize,
-    base_properties: EnumMap<ParticleType, ParticleTypeProperties>,
-}
-
-impl World {
-    fn new(width: usize, height: usize) -> Self {
-        let mut grid: Vec<Particle> = vec![];
-
-        for y in 0..height {
-            for x in 0..width {
-                if x == 0 || x == width - 1 || y == 0 || y == height - 1 {
-                    // println!("x: {:?}, y: {:?}", x, y);
-                    grid.push(Particle::new(ParticleType::Border));
-                } else {
-                    grid.push(Particle::new(ParticleType::Empty));
-                }
-            }
-        }
-
-        Self {
-            grid,
-            width,
-            height,
-            base_properties: enum_map! {
-                ParticleType::Border => ParticleTypeProperties {
-                    base_color: GRAY,
-                    movable: false,
-                    replaceable: false,
-                },
-                ParticleType::Concrete => ParticleTypeProperties {
-                    base_color: GRAY,
-                    movable: false,
-                    replaceable: true,
-                },
-                ParticleType::Empty => ParticleTypeProperties {
-                    base_color: Color::new(0.2, 0.2, 0.2, 1.0),
-                    movable: true,
-                    replaceable: true,
-                },
-                ParticleType::Sand => ParticleTypeProperties {
-                    base_color: YELLOW,
-                    movable: true,
-                    replaceable: true,
-                },
-                ParticleType::Water => ParticleTypeProperties {
-                    base_color: BLUE,
-                    movable: true,
-                    replaceable: true,
-                },
-            },
-        }
-    }
-
-    fn add_new_particle(&mut self, new_particle_type: ParticleType, x: usize, y: usize) {
-        let idx = self.xy_to_index(x, y);
-        let old_particle_type = self.grid[idx].particle_type;
-
-        // TODO add toggle for replace/not replace particles (other than empty & borders)
-        match (new_particle_type, old_particle_type) {
-            (_, ParticleType::Border) => {}
-            (ParticleType::Empty, _) | (_, ParticleType::Empty) => {
-                self.grid[idx] = Particle::new(new_particle_type);
-            }
-            _ => {}
-        }
-    }
-
-    fn update_all_particles(&mut self, rng: &mut ThreadRng) {
-        let mut idx_range: Vec<usize> = ((self.width + 1)..(self.width * self.height - 2))
-            .rev()
-            .collect();
-        idx_range.shuffle(rng);
-        for idx in idx_range.iter() {
-            let idx = *idx;
-            let (x, y) = self.index_to_xy(idx);
-            let particle = self.grid[idx].clone();
-
-            if !particle.moved {
-                match particle.particle_type {
-                    ParticleType::Sand => {
-                        let r = random();
-                        let right: isize = if r { -1 } else { 1 };
-                        let check_directions = [(0, 1), (right, 1), (0 - right, 1)];
-
-                        for (dx, dy) in check_directions.iter() {
-                            let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
-                            let other_type =
-                                self.grid[self.xy_to_index(other_x, other_y)].particle_type;
-
-                            match other_type {
-                                ParticleType::Empty | ParticleType::Water => {
-                                    self.swap_particles(x, y, other_x, other_y);
-                                    break;
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    ParticleType::Water => {
-                        let r = random();
-                        let right: isize = if r { -1 } else { 1 };
-                        // let mut moving_right = particle.bool_state[1];
-                        let moving_right_idx = WaterBoolStateMap::MovingRight as usize;
-                        let check_directions = if particle.bool_state[moving_right_idx] {
-                            [(0, 1), (right, 1), (0 - right, 1), (1, 0), (-1, 0)]
-                        } else {
-                            [(0, 1), (right, 1), (0 - right, 1), (-1, 0), (1, 0)]
-                        };
-
-                        for ((dx, dy), k) in check_directions.iter().zip(0..5) {
-                            let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
-                            let other_type =
-                                self.grid[self.xy_to_index(other_x, other_y)].particle_type;
-
-                            match other_type {
-                                ParticleType::Empty => {
-                                    if k == 4 {
-                                        self.grid[idx].bool_state[moving_right_idx] =
-                                            !self.grid[idx].bool_state[moving_right_idx];
-                                        // moving_right = !moving_right;
-                                    }
-                                    self.swap_particles(x, y, other_x, other_y);
-                                    break;
-                                }
-                                _ => {}
-                            }
-                        }
-                        // particle.bool_state[1] = moving_right;
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    fn swap_particles(&mut self, x1: usize, y1: usize, x2: usize, y2: usize) {
-        let idx1 = self.xy_to_index(x1, y1);
-        let idx2 = self.xy_to_index(x2, y2);
-        self.grid[idx1].moved = true;
-        self.grid[idx2].moved = true;
-        (self.grid[idx1], self.grid[idx2]) = (self.grid[idx2].clone(), self.grid[idx1].clone());
-    }
-
-    fn draw_and_reset_all_particles(&mut self) {
-        for x in 0..self.width {
-            for y in 0..self.height {
-                let idx = self.xy_to_index(x, y);
-                let ptype = self.grid[idx].particle_type;
-                self.grid[idx].draw(x, y, self.base_properties[ptype].base_color);
-                self.grid[idx].moved = false;
-            }
-        }
-    }
-
-    fn xy_to_index(&self, x: usize, y: usize) -> usize {
-        y * self.width + x
-    }
-
-    fn index_to_xy(&self, i: usize) -> (usize, usize) {
-        (i % self.width, i / self.width)
-    }
-}
-// ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 fn pixels_to_xy<T: From<f32>>(px: f32, py: f32) -> (T, T) {
     (
         ((px - WORLD_PX0) / PIXELS_PER_PARTICLE).into(),
@@ -317,16 +150,16 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     // Add particles on left click
     if is_mouse_button_down(MouseButton::Left) {
         let (mousex_min, mousex_max, mousey_min, mousey_max) =
-            calculate_brush(settings.brush_size, world.width, world.height);
+            calculate_brush(settings.brush_size, world.width(), world.height());
 
         // println!("Brush span = {}", brush_span);
         for x in mousex_min..mousex_max {
             // println!("x = {}", x);
-            if x >= world.width {
+            if x >= world.width() {
                 continue;
             }
             for y in mousey_min..mousey_max {
-                if y >= world.height {
+                if y >= world.height() {
                     continue;
                 }
                 world.add_new_particle(settings.placement_type, x, y);
@@ -336,14 +169,14 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     // Highlight a box around the brush is highlight_brush is true
     if settings.highlight_brush {
         let (mousex_min, mousex_max, mousey_min, mousey_max) =
-            calculate_brush(settings.brush_size, world.width, world.height);
+            calculate_brush(settings.brush_size, world.width(), world.height());
         let (px_min, py_min) = xy_to_pixels(mousex_min, mousey_min);
         // let xpt = mousex_min as f32 * PIXELS_PER_PARTICLE;
         // let ypt = mousey_min as f32 * PIXELS_PER_PARTICLE;
         let sizex = (mousex_max - mousex_min) as f32 * PIXELS_PER_PARTICLE;
         let sizey = (mousey_max - mousey_min) as f32 * PIXELS_PER_PARTICLE;
 
-        let mut color = world.base_properties[settings.placement_type].base_color;
+        let mut color = world.base_properties(settings.placement_type).base_color;
         color.a = 0.4;
 
         // draw_rectangle_lines(px_min, py_min, sizex, sizey, 3.0, RED);
@@ -369,7 +202,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     }
     // Reset on "R"
     if is_key_pressed(KeyCode::R) {
-        *world = World::new(world.width, world.height);
+        *world = World::new(world.width(), world.height());
     }
     // Toggle highlighting with "H"
     if is_key_pressed(KeyCode::H) {
@@ -386,7 +219,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
         settings.brush_size += mouse_wheel_y.signum();
         settings.brush_size = settings
             .brush_size
-            .clamp(1.0, usize::max(world.width, world.height) as f32);
+            .clamp(1.0, usize::max(world.width(), world.height()) as f32);
         // println!("Brush size: {}", brush_size);
     }
 }
@@ -419,8 +252,8 @@ fn mouse_location(grid_width: usize, grid_height: usize) -> (usize, usize) {
 
 fn debug_particle_string(world: &World) -> String {
     // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
-    let (x, y) = mouse_location(world.width, world.height);
-    let p = world.grid[world.xy_to_index(x, y)].clone();
+    let (x, y) = mouse_location(world.width(), world.height());
+    let p = world.particle_at(x, y);
     format!("({}, {}): {:?}", x, y, p)
 }
 
