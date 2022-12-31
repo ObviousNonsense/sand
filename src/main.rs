@@ -8,16 +8,16 @@ use particle::*;
 mod particle;
 // mod world;
 
-const GRID_WIDTH_: usize = 200;
+const GRID_WIDTH_: usize = 300;
 const GRID_HEIGHT_: usize = 200;
 // const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
-const PIXELS_PER_PARTICLE: f32 = 2.0;
+const PIXELS_PER_PARTICLE: f32 = 4.0;
 const WORLD_PX0: f32 = 300.0;
 const WORLD_PY0: f32 = 0.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
-const LIMIT_UPDATE_RATE: bool = true;
+const LIMIT_UPDATE_RATE: bool = false;
 // const BRUSH_SIZE: f32 = 1.0;
 
 fn window_conf() -> Conf {
@@ -153,7 +153,7 @@ impl World {
                     replaceable: true,
                 },
                 ParticleType::Empty => ParticleTypeProperties {
-                    base_color: BLACK,
+                    base_color: Color::new(0.2, 0.2, 0.2, 1.0),
                     movable: true,
                     replaceable: true,
                 },
@@ -193,7 +193,7 @@ impl World {
         for idx in idx_range.iter() {
             let idx = *idx;
             let (x, y) = self.index_to_xy(idx);
-            let particle = self.grid[idx];
+            let particle = self.grid[idx].clone();
 
             if !particle.moved {
                 match particle.particle_type {
@@ -220,7 +220,8 @@ impl World {
                         let r = random();
                         let right: isize = if r { -1 } else { 1 };
                         // let mut moving_right = particle.bool_state[1];
-                        let check_directions = if particle.bool_state[1] {
+                        let moving_right_idx = WaterBoolStateMap::MovingRight as usize;
+                        let check_directions = if particle.bool_state[moving_right_idx] {
                             [(0, 1), (right, 1), (0 - right, 1), (1, 0), (-1, 0)]
                         } else {
                             [(0, 1), (right, 1), (0 - right, 1), (-1, 0), (1, 0)]
@@ -234,8 +235,8 @@ impl World {
                             match other_type {
                                 ParticleType::Empty => {
                                     if k == 4 {
-                                        self.grid[idx].bool_state[1] =
-                                            !self.grid[idx].bool_state[1];
+                                        self.grid[idx].bool_state[moving_right_idx] =
+                                            !self.grid[idx].bool_state[moving_right_idx];
                                         // moving_right = !moving_right;
                                     }
                                     self.swap_particles(x, y, other_x, other_y);
@@ -257,7 +258,7 @@ impl World {
         let idx2 = self.xy_to_index(x2, y2);
         self.grid[idx1].moved = true;
         self.grid[idx2].moved = true;
-        (self.grid[idx1], self.grid[idx2]) = (self.grid[idx2], self.grid[idx1]);
+        (self.grid[idx1], self.grid[idx2]) = (self.grid[idx2].clone(), self.grid[idx1].clone());
     }
 
     fn draw_and_reset_all_particles(&mut self) {
@@ -419,7 +420,7 @@ fn mouse_location(grid_width: usize, grid_height: usize) -> (usize, usize) {
 fn debug_particle_string(world: &World) -> String {
     // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
     let (x, y) = mouse_location(world.width, world.height);
-    let p = world.grid[world.xy_to_index(x, y)];
+    let p = world.grid[world.xy_to_index(x, y)].clone();
     format!("({}, {}): {:?}", x, y, p)
 }
 

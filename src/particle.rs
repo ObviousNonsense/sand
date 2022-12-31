@@ -17,8 +17,14 @@ pub struct ParticleTypeProperties {
     pub replaceable: bool, // TODO not used yet
 }
 
-// #[derive(Debug)]
 #[derive(Debug, Clone, Copy)]
+#[repr(usize)]
+pub enum WaterBoolStateMap {
+    MovingRight = 1,
+}
+
+// #[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Particle {
     pub particle_type: ParticleType,
     // pub color: Color,
@@ -37,7 +43,13 @@ impl Particle {
         //     ParticleType::Water => BLUE,
         // };
 
-        let bool_state = [false, false];
+        // let bool_state = [false, false];
+        let mut bool_state = [false, false];
+
+        match particle_type {
+            ParticleType::Water => bool_state[WaterBoolStateMap::MovingRight as usize] = random(),
+            _ => {}
+        }
 
         Self {
             particle_type,
