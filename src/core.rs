@@ -1,4 +1,5 @@
 use super::*;
+use array2d::Array2D;
 
 #[derive(Debug, Clone, Copy, PartialEq, Enum)]
 #[repr(usize)]
@@ -63,8 +64,6 @@ impl Particle {
     }
 
     pub fn draw(&self, x: usize, y: usize, color: Color) {
-        // let px = PIXELS_PER_PARTICLE * x as f32;
-        // let py = PIXELS_PER_PARTICLE * y as f32;
         let (px, py) = xy_to_pixels(x, y);
         draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
     }
@@ -72,7 +71,7 @@ impl Particle {
 
 // ─── Grid Functions ────────────────────────────────────────────────────────────────────────── ✣ ─
 pub struct World {
-    grid: Vec<Particle>,
+    grid: Array2D<Particle>,
     width: usize,
     height: usize,
     base_properties: EnumMap<ParticleType, ParticleTypeProperties>,
@@ -80,15 +79,13 @@ pub struct World {
 
 impl World {
     pub fn new(width: usize, height: usize) -> Self {
-        let mut grid: Vec<Particle> = vec![];
+        let mut grid = Array2D::filled_with(Particle::new(ParticleType::Empty), width, height);
 
         for y in 0..height {
             for x in 0..width {
                 if x == 0 || x == width - 1 || y == 0 || y == height - 1 {
                     // println!("x: {:?}, y: {:?}", x, y);
-                    grid.push(Particle::new(ParticleType::Border));
-                } else {
-                    grid.push(Particle::new(ParticleType::Empty));
+                    grid[(x, y)] = Particle::new(ParticleType::Border);
                 }
             }
         }
@@ -145,18 +142,17 @@ impl World {
     }
 
     pub fn particle_at(&self, x: usize, y: usize) -> Particle {
-        self.grid[self.xy_to_index(x, y)].clone()
+        self.grid[(x, y)].clone()
     }
 
     pub fn add_new_particle(&mut self, new_particle_type: ParticleType, x: usize, y: usize) {
-        let idx = self.xy_to_index(x, y);
-        let old_particle_type = self.grid[idx].particle_type;
+        let old_particle_type = self.grid[(x, y)].particle_type;
 
         // TODO add toggle for replace/not replace particles (other than empty & borders)
         match (new_particle_type, old_particle_type) {
             (_, ParticleType::Border) => {}
             (ParticleType::Empty, _) | (_, ParticleType::Empty) => {
-                self.grid[idx] = Particle::new(new_particle_type);
+                self.grid[(x, y)] = Particle::new(new_particle_type);
             }
             _ => {}
         }
@@ -195,30 +191,29 @@ impl World {
             let y3 = (y2 as isize + pos[1]) as usize;
             moved = self.try_grid_position(x2, y2, x3, y3, false);
             if moved {
-                self.grid[xy_to_index(x3, y3, self.width)].moved = true;
+                self.grid[(x3, y3)].moved = true;
                 break;
             }
         }
         if !moved {
-            self.grid[xy_to_index(x2, y2, self.width)].moved = true;
+            self.grid[(x2, y2)].moved = true;
         }
         self.swap_particles(x1, y1, x2, y2);
     }
 
     fn swap_particles(&mut self, x1: usize, y1: usize, x2: usize, y2: usize) {
-        let idx1 = self.xy_to_index(x1, y1);
-        let idx2 = self.xy_to_index(x2, y2);
-        self.grid[idx1].moved = true;
-        self.grid[idx2].moved = true;
-        (self.grid[idx1], self.grid[idx2]) = (self.grid[idx2].clone(), self.grid[idx1].clone());
+        self.grid[(x1, y1)].moved = true;
+        self.grid[(x2, y2)].moved = true;
+        (self.grid[(x1, y1)], self.grid[(x2, y2)]) =
+            (self.grid[(x2, y2)].clone(), self.grid[(x1, y1)].clone());
     }
 
     fn weight_at(&self, x: usize, y: usize) -> f32 {
-        self.base_properties[self.grid[self.xy_to_index(x, y)].particle_type].weight
+        self.base_properties[self.grid[(x, y)].particle_type].weight
     }
 
     fn movable_at(&self, x: usize, y: usize) -> bool {
-        self.base_properties[self.grid[self.xy_to_index(x, y)].particle_type].movable
+        self.base_properties[self.grid[(x, y)].particle_type].movable
     }
 
     pub fn update_all_particles(&mut self, rng: &mut ThreadRng) {
@@ -229,13 +224,12 @@ impl World {
         for idx in idx_range.iter() {
             let idx = *idx;
             let (x, y) = self.index_to_xy(idx);
-            let particle = self.grid[idx].clone();
+            let particle = self.grid[(x, y)].clone();
 
             if !particle.updated {
-                self.grid[idx].updated = true;
+                self.grid[(x, y)].updated = true;
                 match particle.particle_type {
                     ParticleType::Sand => {
-                        // self.try_sand_movement(x, y);
                         let r = random();
                         let right: isize = if r { -1 } else { 1 };
                         let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
@@ -262,9 +256,8 @@ impl World {
 
                             let moved = self.try_grid_position(x, y, other_x, other_y, true);
                             if moved && k == 4 {
-                                let new_idx = xy_to_index(other_x, other_y, self.width);
-                                self.grid[new_idx].bool_state[moving_right_idx] =
-                                    !self.grid[new_idx].bool_state[moving_right_idx];
+                                self.grid[(other_x, other_y)].bool_state[moving_right_idx] =
+                                    !self.grid[(other_x, other_y)].bool_state[moving_right_idx];
                             }
                         }
                     }
@@ -277,25 +270,24 @@ impl World {
     pub fn draw_and_reset_all_particles(&mut self) {
         for x in 0..self.width {
             for y in 0..self.height {
-                let idx = self.xy_to_index(x, y);
-                let ptype = self.grid[idx].particle_type;
-                self.grid[idx].draw(x, y, self.base_properties[ptype].base_color);
-                self.grid[idx].updated = false;
-                self.grid[idx].moved = false;
+                let ptype = self.grid[(x, y)].particle_type;
+                self.grid[(x, y)].draw(x, y, self.base_properties[ptype].base_color);
+                self.grid[(x, y)].updated = false;
+                self.grid[(x, y)].moved = false;
             }
         }
     }
 
-    pub fn xy_to_index(&self, x: usize, y: usize) -> usize {
-        y * self.width + x
-    }
+    // pub fn xy_to_index(&self, x: usize, y: usize) -> usize {
+    //     y * self.width + x
+    // }
 
     fn index_to_xy(&self, i: usize) -> (usize, usize) {
         (i % self.width, i / self.width)
     }
 }
 
-fn xy_to_index(x: usize, y: usize, width: usize) -> usize {
-    y * width + x
-}
+// fn xy_to_index(x: usize, y: usize, width: usize) -> usize {
+//     y * width + x
+// }
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
