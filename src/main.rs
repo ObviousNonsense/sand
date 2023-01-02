@@ -1,4 +1,3 @@
-use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng};
 // use color_eyre::eyre::Result;
 use crate::core::*;
 use egui_macroquad::*;
@@ -51,8 +50,6 @@ async fn main() {
     //     GRID_HEIGHT as f32 * PIXELS_PER_PARTICLE,
     // );
 
-    let mut rng = thread_rng();
-
     // Initialize Grid
     let mut world = World::new(GRID_WIDTH_, GRID_HEIGHT_);
 
@@ -70,7 +67,7 @@ async fn main() {
     };
 
     loop {
-        egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut rng, &mut world, fps));
+        egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut world, fps));
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
         // clear_background(BLACK);
@@ -78,7 +75,7 @@ async fn main() {
         // ─────────────────────────────────────────────────────────────────────────
 
         // ─── Input ───────────────────────────────────────────────────────────────
-        handle_input(&mut settings, &mut world, &mut rng);
+        handle_input(&mut settings, &mut world);
         // ─────────────────────────────────────────────────────────────────────────
 
         let time = get_time();
@@ -103,7 +100,7 @@ async fn main() {
 
             // ─── Update All Particles ────────────────────────────────────
             if !settings.paused {
-                world.update_all_particles(&mut rng);
+                world.update_all_particles();
             }
             // ─────────────────────────────────────────────────────────────
         }
@@ -129,7 +126,7 @@ fn xy_to_pixels(x: usize, y: usize) -> (f32, f32) {
 }
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
-fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng) {
+fn handle_input(settings: &mut Settings, world: &mut World) {
     // let grid_width = world.width;
     // let grid_height = world.height;
 
@@ -189,7 +186,7 @@ fn handle_input(settings: &mut Settings, world: &mut World, rng: &mut ThreadRng)
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
         world.draw_and_reset_all_particles();
-        world.update_all_particles(rng);
+        world.update_all_particles();
     }
     // Pause/Unpause with space
     if is_key_pressed(KeyCode::Space) {
@@ -257,13 +254,7 @@ fn debug_particle_string(world: &World) -> String {
     format!("({}, {}): {:?}", x, y, p)
 }
 
-fn setup_ui(
-    ctx: &egui::Context,
-    settings: &mut Settings,
-    rng: &mut ThreadRng,
-    world: &mut World,
-    fps: f64,
-) {
+fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps: f64) {
     egui::Window::new("")
         .resizable(false)
         .title_bar(false)
@@ -278,7 +269,7 @@ fn setup_ui(
                         ui.selectable_value(&mut settings.paused, true, "⏸");
                         ui.selectable_value(&mut settings.paused, false, "▶");
                         if ui.button("⏭").clicked() && settings.paused {
-                            world.update_all_particles(rng);
+                            world.update_all_particles();
                         }
                     });
                 });

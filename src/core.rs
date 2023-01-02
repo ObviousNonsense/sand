@@ -1,4 +1,5 @@
 use super::*;
+use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
 use array2d::Array2D;
 
 #[derive(Debug, Clone, Copy, PartialEq, Enum)]
@@ -75,6 +76,7 @@ pub struct World {
     width: usize,
     height: usize,
     base_properties: EnumMap<ParticleType, ParticleTypeProperties>,
+    rng: ThreadRng,
 }
 
 impl World {
@@ -126,6 +128,7 @@ impl World {
                     // replaceable: true,
                 },
             },
+            rng: thread_rng(),
         }
     }
 
@@ -170,12 +173,12 @@ impl World {
         let my_weight = self.weight_at(x1, y1);
         let other_weight = self.weight_at(x2, y2);
         if other_p.particle_type == ParticleType::Empty {
-            if my_weight * random::<f32>() > other_weight {
+            if my_weight * self.rng.gen::<f32>() > other_weight {
                 self.swap_particles(x1, y1, x2, y2);
                 return true;
             }
         } else if try_swap && self.movable_at(x2, y2) && !other_p.updated {
-            if my_weight * random::<f32>() > other_weight {
+            if my_weight * self.rng.gen::<f32>() > other_weight {
                 self.displace_particle(x1, y1, x2, y2);
                 return true;
             }
@@ -216,11 +219,11 @@ impl World {
         self.base_properties[self.grid[(x, y)].particle_type].movable
     }
 
-    pub fn update_all_particles(&mut self, rng: &mut ThreadRng) {
+    pub fn update_all_particles(&mut self) {
         let mut idx_range: Vec<usize> = ((self.width + 1)..(self.width * self.height - 2))
             .rev()
             .collect();
-        idx_range.shuffle(rng);
+        idx_range.shuffle(&mut self.rng);
         for idx in idx_range.iter() {
             let idx = *idx;
             let (x, y) = self.index_to_xy(idx);
@@ -230,7 +233,7 @@ impl World {
                 self.grid[(x, y)].updated = true;
                 match particle.particle_type {
                     ParticleType::Sand => {
-                        let r = random();
+                        let r = self.rng.gen();
                         let right: isize = if r { -1 } else { 1 };
                         let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
 
@@ -241,7 +244,7 @@ impl World {
                         }
                     }
                     ParticleType::Water => {
-                        let r = random();
+                        let r = self.rng.gen();
                         let right: isize = if r { -1 } else { 1 };
                         // let mut moving_right = particle.bool_state[1];
                         let moving_right_idx = WaterBoolStateMap::MovingRight as usize;
