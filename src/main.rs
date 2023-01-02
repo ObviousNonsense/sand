@@ -8,10 +8,10 @@ use macroquad::prelude::*;
 mod core;
 // mod world;
 
-const GRID_WIDTH_: usize = 300;
-const GRID_HEIGHT_: usize = 200;
+const GRID_WIDTH_: usize = 200;
+const GRID_HEIGHT_: usize = 100;
 // const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
-const PIXELS_PER_PARTICLE: f32 = 4.0;
+const PIXELS_PER_PARTICLE: f32 = 6.0;
 const WORLD_PX0: f32 = 300.0;
 const WORLD_PY0: f32 = 0.0;
 
