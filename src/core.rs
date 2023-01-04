@@ -14,8 +14,27 @@ pub enum ParticleType {
 
 #[derive(Debug, Clone)]
 enum ParticleState {
-    Water { moving_right: bool },
+    Water { moved: bool, moving_right: bool },
+    Sand { moved: bool },
     None,
+}
+
+impl ParticleState {
+    fn moved(&self) -> Option<bool> {
+        match self {
+            ParticleState::Water { moved, .. } | ParticleState::Sand { moved } => Some(*moved),
+            _ => None,
+        }
+    }
+
+    fn set_moved(&mut self, new_moved: bool) {
+        match self {
+            ParticleState::Water { ref mut moved, .. } | ParticleState::Sand { ref mut moved } => {
+                *moved = new_moved
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl ParticleState {}
@@ -41,8 +60,6 @@ pub struct Particle {
     state: ParticleState,
     // pub color: Color,
     updated: bool,
-    moved: bool,
-    // pub bool_state: [bool; 2],
 }
 
 impl Particle {
@@ -56,13 +73,12 @@ impl Particle {
         //     ParticleType::Water => BLUE,
         // };
 
-        // let bool_state = [false, false];
-        // let mut bool_state = [false, false];
-
         let state = match particle_type {
             ParticleType::Water => ParticleState::Water {
+                moved: false,
                 moving_right: random(),
             },
+            ParticleType::Sand => ParticleState::Sand { moved: false },
             _ => ParticleState::None,
         };
 
@@ -71,7 +87,7 @@ impl Particle {
             state,
             // color,
             updated: false,
-            moved: false,
+            // moved: false,
             // bool_state,
         }
     }
@@ -124,7 +140,7 @@ impl World {
                 ParticleType::Empty => ParticleTypeProperties {
                     base_color: Color::new(0.2, 0.2, 0.2, 1.0),
                     weight: 0.0,
-                    movable: true,
+                    movable: false,
                     // replaceable: true,
                 },
                 ParticleType::Sand => ParticleTypeProperties {
@@ -186,11 +202,14 @@ impl World {
         let other_weight = self.weight_at(x2, y2);
         if other_p.particle_type == ParticleType::Empty {
             if my_weight * self.rng.gen::<f32>() > other_weight {
+                self.grid[(x1, y1)].state.set_moved(true);
                 self.swap_particles(x1, y1, x2, y2);
                 return true;
             }
         } else if try_swap && self.movable_at(x2, y2) && !other_p.updated {
             if my_weight * self.rng.gen::<f32>() > other_weight {
+                self.grid[(x1, y1)].state.set_moved(true);
+                self.grid[(x2, y2)].state.set_moved(true);
                 self.displace_particle(x1, y1, x2, y2);
                 return true;
             }
@@ -206,19 +225,18 @@ impl World {
             let y3 = (y2 as isize + pos[1]) as usize;
             moved = self.try_grid_position(x2, y2, x3, y3, false);
             if moved {
-                self.grid[(x3, y3)].moved = true;
+                // self.grid[(x3, y3)].moved = true;
+                self.grid[(x3, y3)].state.set_moved(true);
                 break;
             }
         }
         if !moved {
-            self.grid[(x2, y2)].moved = true;
+            self.grid[(x2, y2)].state.set_moved(true);
         }
         self.swap_particles(x1, y1, x2, y2);
     }
 
     fn swap_particles(&mut self, x1: usize, y1: usize, x2: usize, y2: usize) {
-        self.grid[(x1, y1)].moved = true;
-        self.grid[(x2, y2)].moved = true;
         (self.grid[(x1, y1)], self.grid[(x2, y2)]) =
             (self.grid[(x2, y2)].clone(), self.grid[(x1, y1)].clone());
     }
@@ -245,6 +263,9 @@ impl World {
                 self.grid[(x, y)].updated = true;
                 match particle.particle_type {
                     ParticleType::Sand => {
+                        if particle.state.moved().unwrap() {
+                            continue;
+                        }
                         let r = self.rng.gen();
                         let right: isize = if r { -1 } else { 1 };
                         let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
@@ -256,11 +277,14 @@ impl World {
                         }
                     }
                     ParticleType::Water => {
+                        if particle.state.moved().unwrap() {
+                            continue;
+                        }
                         let r = self.rng.gen();
                         let right: isize = if r { -1 } else { 1 };
 
                         let moving_right = match particle.state {
-                            ParticleState::Water { moving_right } => moving_right,
+                            ParticleState::Water { moving_right, .. } => moving_right,
                             _ => unreachable!(),
                         };
 
@@ -278,6 +302,7 @@ impl World {
                                 let moving_right_new = match self.grid[(other_x, other_y)].state {
                                     ParticleState::Water {
                                         ref mut moving_right,
+                                        ..
                                     } => moving_right,
                                     _ => unreachable!(),
                                 };
@@ -298,7 +323,9 @@ impl World {
                 let ptype = self.grid[(x, y)].particle_type;
                 self.grid[(x, y)].draw(x, y, self.base_properties[ptype].base_color);
                 self.grid[(x, y)].updated = false;
-                self.grid[(x, y)].moved = false;
+                if self.base_properties[ptype].movable {
+                    self.grid[(x, y)].state.set_moved(false);
+                }
             }
         }
     }
