@@ -1,7 +1,7 @@
 // use color_eyre::eyre::Result;
 use crate::core::*;
 use egui_macroquad::*;
-use enum_map::{enum_map, Enum, EnumMap};
+// use enum_map::{enum_map, Enum, EnumMap};
 use macroquad::prelude::*;
 
 mod core;
@@ -172,7 +172,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
         let sizex = (mousex_max - mousex_min) as f32 * PIXELS_PER_PARTICLE;
         let sizey = (mousey_max - mousey_min) as f32 * PIXELS_PER_PARTICLE;
 
-        let mut color = world.base_properties(settings.placement_type).base_color;
+        let mut color = base_properties(settings.placement_type).base_color;
         color.a = 0.4;
 
         // draw_rectangle_lines(px_min, py_min, sizex, sizey, 3.0, RED);
