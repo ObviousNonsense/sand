@@ -7,8 +7,8 @@ use macroquad::prelude::*;
 mod core;
 // mod world;
 
-const GRID_WIDTH_: usize = 250;
-const GRID_HEIGHT_: usize = 150;
+const GRID_WIDTH_: usize = 100;
+const GRID_HEIGHT_: usize = 100;
 // const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 6.0;
 const WORLD_PX0: f32 = 300.0;
@@ -44,10 +44,12 @@ struct Settings {
 async fn main() {
     // color_eyre::install()?;
 
-    // Something wrong with this on Mac for some reason
+    // Something wrong with this on Mac for some reason. But also without it the
+    // display is wrong on windows when the 4k monitor with 150% scaling is the
+    // primary monitor
     // request_new_screen_size(
-    //     GRID_WIDTH as f32 * PIXELS_PER_PARTICLE,
-    //     GRID_HEIGHT as f32 * PIXELS_PER_PARTICLE,
+    //     WORLD_PX0 + GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE,
+    //     WORLD_PY0 + GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE,
     // );
 
     // Initialize Grid
@@ -127,9 +129,6 @@ fn xy_to_pixels(x: usize, y: usize) -> (f32, f32) {
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
 fn handle_input(settings: &mut Settings, world: &mut World) {
-    // let grid_width = world.width;
-    // let grid_height = world.height;
-
     // Change particle placement type with number keys
     if is_key_pressed(KeyCode::Key1) {
         settings.placement_type = ParticleType::Sand;

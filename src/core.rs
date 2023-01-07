@@ -47,12 +47,6 @@ pub struct ParticleTypeProperties {
     movable: bool,
 }
 
-// #[derive(Debug, Clone, Copy)]
-// #[repr(usize)]
-// pub enum WaterBoolStateMap {
-//     MovingRight = 1,
-// }
-
 // #[derive(Debug)]
 #[derive(Debug, Clone)]
 pub struct Particle {
@@ -65,13 +59,6 @@ pub struct Particle {
 impl Particle {
     fn new(particle_type: ParticleType) -> Self {
         // TODO: modulate individual particle color relative to base_color
-        // let color = match particle_type {
-        //     ParticleType::Empty => BLACK,
-        //     ParticleType::Border => GRAY,
-        //     ParticleType::Concrete => GRAY,
-        //     ParticleType::Sand => YELLOW,
-        //     ParticleType::Water => BLUE,
-        // };
 
         let state = match particle_type {
             ParticleType::Water => ParticleState::Water {
@@ -210,6 +197,7 @@ impl World {
             if my_weight * self.rng.gen::<f32>() > other_weight {
                 self.grid[(x1, y1)].state.set_moved(true);
                 self.grid[(x2, y2)].state.set_moved(true);
+                // self.swap_particles(x1, y1, x2, y2);
                 self.displace_particle(x1, y1, x2, y2);
                 return true;
             }
@@ -250,6 +238,8 @@ impl World {
     }
 
     pub fn update_all_particles(&mut self) {
+        // TODO: Consider pre-generating this and storing it (either pass it
+        // into the function or store it in the struct and clone it here)
         let mut idx_range: Vec<usize> = ((self.width + 1)..(self.width * self.height - 2))
             .rev()
             .collect();
@@ -259,60 +249,62 @@ impl World {
             let (x, y) = self.index_to_xy(idx);
             let particle = self.grid[(x, y)].clone();
 
-            if !particle.updated {
-                self.grid[(x, y)].updated = true;
-                match particle.particle_type {
-                    ParticleType::Sand => {
-                        if particle.state.moved().unwrap() {
-                            continue;
-                        }
-                        let r = self.rng.gen();
-                        let right: isize = if r { -1 } else { 1 };
-                        let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+            if particle.updated {
+                continue;
+            }
 
-                        for (dx, dy) in check_directions.iter() {
-                            let (other_x, other_y) =
-                                ((x as isize + dx) as usize, (y as isize + dy) as usize);
-                            self.try_grid_position(x, y, other_x, other_y, true);
-                        }
+            self.grid[(x, y)].updated = true;
+            match particle.particle_type {
+                ParticleType::Sand => {
+                    if particle.state.moved().unwrap() {
+                        continue;
                     }
-                    ParticleType::Water => {
-                        if particle.state.moved().unwrap() {
-                            continue;
-                        }
-                        let r = self.rng.gen();
-                        let right: isize = if r { -1 } else { 1 };
+                    let r = self.rng.gen();
+                    let right: isize = if r { -1 } else { 1 };
+                    let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
 
-                        let moving_right = match particle.state {
-                            ParticleState::Water { moving_right, .. } => moving_right,
-                            _ => unreachable!(),
-                        };
-
-                        let check_directions = if moving_right {
-                            [(0, 1), (right, 1), (0 - right, 1), (1, 0), (-1, 0)]
-                        } else {
-                            [(0, 1), (right, 1), (0 - right, 1), (-1, 0), (1, 0)]
-                        };
-
-                        for ((dx, dy), k) in check_directions.iter().zip(0..5) {
-                            let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
-
-                            let moved = self.try_grid_position(x, y, other_x, other_y, true);
-                            if moved && k == 4 {
-                                let moving_right_new = match self.grid[(other_x, other_y)].state {
-                                    ParticleState::Water {
-                                        ref mut moving_right,
-                                        ..
-                                    } => moving_right,
-                                    _ => unreachable!(),
-                                };
-
-                                *moving_right_new = !moving_right;
-                            }
-                        }
+                    for (dx, dy) in check_directions.iter() {
+                        let (other_x, other_y) =
+                            ((x as isize + dx) as usize, (y as isize + dy) as usize);
+                        self.try_grid_position(x, y, other_x, other_y, true);
                     }
-                    _ => {}
                 }
+                ParticleType::Water => {
+                    if particle.state.moved().unwrap() {
+                        continue;
+                    }
+                    let r = self.rng.gen();
+                    let right: isize = if r { -1 } else { 1 };
+
+                    let moving_right = match particle.state {
+                        ParticleState::Water { moving_right, .. } => moving_right,
+                        _ => unreachable!(),
+                    };
+
+                    let check_directions = if moving_right {
+                        [(0, 1), (right, 1), (0 - right, 1), (1, 0), (-1, 0)]
+                    } else {
+                        [(0, 1), (right, 1), (0 - right, 1), (-1, 0), (1, 0)]
+                    };
+
+                    for ((dx, dy), k) in check_directions.iter().zip(0..5) {
+                        let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
+
+                        let moved = self.try_grid_position(x, y, other_x, other_y, true);
+                        if moved && k == 4 {
+                            let moving_right_new = match self.grid[(other_x, other_y)].state {
+                                ParticleState::Water {
+                                    ref mut moving_right,
+                                    ..
+                                } => moving_right,
+                                _ => unreachable!(),
+                            };
+
+                            *moving_right_new = !moving_right;
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -330,6 +322,7 @@ impl World {
         }
     }
 
+    // TODO: Consider pre-calculating this and storing it as a vector
     fn index_to_xy(&self, i: usize) -> (usize, usize) {
         (i % self.width, i / self.width)
     }
