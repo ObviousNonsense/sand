@@ -37,6 +37,7 @@ struct Settings {
     highlight_brush: bool,
     display_fps: bool,
     placement_type: ParticleType,
+    replace: bool,
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────── ✣ ─
@@ -66,6 +67,7 @@ async fn main() {
         highlight_brush: true,
         display_fps: false,
         placement_type: ParticleType::Sand,
+        replace: false,
     };
 
     loop {
@@ -158,7 +160,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 if y >= world.height() {
                     continue;
                 }
-                world.add_new_particle(settings.placement_type, x, y);
+                world.add_new_particle(settings.placement_type, x, y, settings.replace);
             }
         }
     }
@@ -320,6 +322,9 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         settings.brush_size -= 1.0;
                     }
                     ui.allocate_space(ui.available_size());
+                });
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut settings.replace, "Replace");
                 })
             });
             ui.group(|ui| {

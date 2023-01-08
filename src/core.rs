@@ -167,16 +167,25 @@ impl World {
         &self.grid[xy]
     }
 
-    pub fn add_new_particle(&mut self, new_particle_type: ParticleType, x: usize, y: usize) {
+    pub fn add_new_particle(
+        &mut self,
+        new_particle_type: ParticleType,
+        x: usize,
+        y: usize,
+        replace: bool,
+    ) {
         let old_particle_type = self.grid[(x, y)].particle_type;
 
-        // TODO add toggle for replace/not replace particles (other than empty & borders)
         match (new_particle_type, old_particle_type) {
             (_, ParticleType::Border) => {}
             (ParticleType::Empty, _) | (_, ParticleType::Empty) => {
                 self.grid[(x, y)] = Particle::new(new_particle_type);
             }
-            _ => {}
+            _ => {
+                if replace {
+                    self.grid[(x, y)] = Particle::new(new_particle_type);
+                }
+            }
         }
     }
 
