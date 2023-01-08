@@ -1,9 +1,6 @@
 // use color_eyre::eyre::Result;
 use crate::core::*;
-use egui_macroquad::{
-    egui::{ComboBox, WidgetText},
-    *,
-};
+use egui_macroquad::{egui::ComboBox, *};
 // use enum_map::{enum_map, Enum, EnumMap};
 use macroquad::prelude::*;
 

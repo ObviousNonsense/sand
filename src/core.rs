@@ -1,5 +1,5 @@
 use super::*;
-use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
+use ::rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
 use array2d::Array2D;
 
 #[derive(Debug, PartialEq)]
@@ -269,7 +269,7 @@ impl World {
         let my_weight = self.weight_at(xy1);
         let other_weight = self.weight_at(xy2);
         if other_p.particle_type == ParticleType::Empty {
-            if my_weight * self.rng.gen::<f32>() > other_weight {
+            if xy1.1 == xy2.1 || my_weight * self.rng.gen::<f32>() > other_weight {
                 self.particle_grid[xy1].set_moved(true);
                 self.swap_particles(xy1, xy2);
                 return true;
@@ -278,7 +278,7 @@ impl World {
             if my_weight * self.rng.gen::<f32>() > other_weight {
                 self.particle_grid[xy1].set_moved(true);
                 self.particle_grid[xy2].set_moved(true);
-                // self.swap_particles(x1, y1, x2, y2);
+                // self.swap_particles(xy1, xy2);
                 self.displace_particle(xy1, xy2);
                 return true;
             }
@@ -354,21 +354,21 @@ impl World {
             if particle_clone.updated {
                 continue;
             }
-
             self.particle_grid[xy].updated = true;
+
             match particle_clone.particle_type {
                 ParticleType::Sand => {
-                    self.sand_movement(xy, &particle_clone);
+                    self.sand_movement(xy, particle_clone);
                 }
                 ParticleType::Water => {
-                    self.fluid_movement(xy, &particle_clone);
+                    self.fluid_movement(xy, particle_clone);
                 }
                 _ => {}
             }
         }
     }
 
-    fn sand_movement(&mut self, xy: (usize, usize), particle_clone: &Particle) {
+    fn sand_movement(&mut self, xy: (usize, usize), particle_clone: Particle) {
         if particle_clone.moved().unwrap() {
             return;
         }
@@ -378,29 +378,35 @@ impl World {
 
         for (dx, dy) in check_directions.iter() {
             let other_xy = ((xy.0 as isize + dx) as usize, (xy.1 as isize + dy) as usize);
-            self.try_grid_position(xy, other_xy, true);
+            let moved = self.try_grid_position(xy, other_xy, true);
+            if moved {
+                break;
+            }
         }
     }
 
-    fn fluid_movement(&mut self, xy: (usize, usize), particle_clone: &Particle) {
+    fn fluid_movement(&mut self, xy: (usize, usize), particle_clone: Particle) {
         if particle_clone.moved().unwrap() {
             return;
         }
-        let r = self.rng.gen();
-        let right: isize = if r { -1 } else { 1 };
+        // let r = self.rng.gen();
+        // let right: isize = if r { -1 } else { 1 };
 
         let check_directions = if particle_clone.moving_right().unwrap() {
-            [(0, 1), (right, 1), (0 - right, 1), (1, 0), (-1, 0)]
+            [(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)]
         } else {
-            [(0, 1), (right, 1), (0 - right, 1), (-1, 0), (1, 0)]
+            [(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)]
         };
 
         for ((dx, dy), k) in check_directions.iter().zip(0..5) {
             let other_xy = ((xy.0 as isize + dx) as usize, xy.1 + dy);
             let moved = self.try_grid_position(xy, other_xy, true);
 
-            if moved && k == 4 {
-                self.particle_grid[other_xy].toggle_moving_right();
+            if moved {
+                if k == 4 {
+                    self.particle_grid[other_xy].toggle_moving_right();
+                }
+                break;
             }
         }
     }
