@@ -2,8 +2,23 @@ use super::*;
 use ::rand::{random, rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
 use array2d::Array2D;
 
+#[derive(Debug, PartialEq)]
+pub enum Placeable {
+    Particle,
+    Source,
+}
+
+impl Placeable {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Placeable::Particle => "Particle",
+            Placeable::Source => "Source",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(usize)]
+// #[repr(usize)]
 pub enum ParticleType {
     Empty,
     Border,
@@ -67,7 +82,7 @@ pub struct Particle {
 }
 
 impl Particle {
-    fn new(particle_type: ParticleType) -> Self {
+    fn new(particle_type: ParticleType, rng: &mut ThreadRng) -> Self {
         // TODO: modulate individual particle color relative to base_color
 
         let moved = if base_properties(particle_type).movable {
@@ -77,7 +92,7 @@ impl Particle {
         };
 
         let moving_right = if base_properties(particle_type).fluid {
-            Some(random())
+            Some(rng.gen())
         } else {
             None
         };
@@ -115,15 +130,52 @@ impl Particle {
         self.moving_right
     }
 
-    fn draw(&self, x: usize, y: usize, color: Color) {
+    fn draw(&self, x: usize, y: usize) {
         let (px, py) = xy_to_pixels(x, y);
+        let color = base_properties(self.particle_type).base_color;
         draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ParticleSource {
+    particle_type: ParticleType,
+    replaces: bool,
+}
+
+impl ParticleSource {
+    fn draw(&self, x: usize, y: usize) {
+        let (px, py) = xy_to_pixels(x, y);
+        let mut color = base_properties(self.particle_type).base_color;
+        color.a = 0.5;
+        color.r -= 0.1;
+        color.g -= 0.1;
+        color.b -= 0.1;
+        draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
+
+        if self.particle_type != ParticleType::Empty {
+            let hatch_color = if self.replaces {
+                Color::new(0.0, 0.0, 0.0, 0.2)
+            } else {
+                Color::new(1.0, 1.0, 1.0, 0.5)
+            };
+
+            draw_line(
+                px,
+                py,
+                px + PIXELS_PER_PARTICLE,
+                py + PIXELS_PER_PARTICLE,
+                1.0,
+                hatch_color,
+            );
+        }
     }
 }
 
 // ─── World ─────────────────────────────────────────────────────────────────────────────────── ✣ ─
 pub struct World {
     particle_grid: Array2D<Particle>,
+    source_grid: Array2D<Option<ParticleSource>>,
     width: usize,
     height: usize,
     rng: ThreadRng,
@@ -131,22 +183,27 @@ pub struct World {
 
 impl World {
     pub fn new(width: usize, height: usize) -> Self {
-        let mut grid = Array2D::filled_with(Particle::new(ParticleType::Empty), width, height);
+        let mut rng = thread_rng();
+
+        let mut particle_grid =
+            Array2D::filled_with(Particle::new(ParticleType::Empty, &mut rng), width, height);
+        let source_grid = Array2D::filled_with(None, width, height);
 
         for y in 0..height {
             for x in 0..width {
                 if x == 0 || x == width - 1 || y == 0 || y == height - 1 {
                     // println!("x: {:?}, y: {:?}", x, y);
-                    grid[(x, y)] = Particle::new(ParticleType::Border);
+                    particle_grid[(x, y)] = Particle::new(ParticleType::Border, &mut rng);
                 }
             }
         }
 
         Self {
-            particle_grid: grid,
+            particle_grid,
+            source_grid,
             width,
             height,
-            rng: thread_rng(),
+            rng,
         }
     }
 
@@ -165,23 +222,41 @@ impl World {
     pub fn add_new_particle(
         &mut self,
         new_particle_type: ParticleType,
-        x: usize,
-        y: usize,
+        xy: (usize, usize),
         replace: bool,
     ) {
-        let old_particle_type = self.particle_grid[(x, y)].particle_type;
+        let old_particle_type = self.particle_grid[xy].particle_type;
 
         match (new_particle_type, old_particle_type) {
             (_, ParticleType::Border) => {}
             (ParticleType::Empty, _) | (_, ParticleType::Empty) => {
-                self.particle_grid[(x, y)] = Particle::new(new_particle_type);
+                self.particle_grid[xy] = Particle::new(new_particle_type, &mut self.rng);
             }
             _ => {
                 if replace {
-                    self.particle_grid[(x, y)] = Particle::new(new_particle_type);
+                    self.particle_grid[xy] = Particle::new(new_particle_type, &mut self.rng);
                 }
             }
         }
+    }
+
+    pub fn add_new_source(
+        &mut self,
+        source_type: ParticleType,
+        xy: (usize, usize),
+        source_replaces: bool,
+        replace: bool,
+    ) {
+        if let Some(_) = self.source_grid[xy] {
+            if !replace {
+                return;
+            }
+        }
+
+        self.source_grid[xy] = Some(ParticleSource {
+            particle_type: source_type,
+            replaces: source_replaces,
+        })
     }
 
     fn try_grid_position(
@@ -246,7 +321,25 @@ impl World {
         base_properties(self.particle_grid[xy].particle_type).movable
     }
 
-    pub fn update_all_particles(&mut self) {
+    pub fn update_all(&mut self) {
+        self.update_all_sources();
+        self.update_all_particles();
+    }
+
+    fn update_all_sources(&mut self) {
+        for x in 1..self.width {
+            for y in 1..self.height {
+                let xy = (x, y);
+                if let Some(source) = self.source_grid[xy].clone() {
+                    if self.rng.gen() {
+                        self.add_new_particle(source.particle_type, xy, source.replaces);
+                    }
+                }
+            }
+        }
+    }
+
+    fn update_all_particles(&mut self) {
         // TODO: Consider pre-generating this and storing it (either pass it
         // into the function or store it in the struct and clone it here)
         let mut idx_range: Vec<usize> = ((self.width + 1)..(self.width * self.height - 2))
@@ -316,10 +409,14 @@ impl World {
         for x in 0..self.width {
             for y in 0..self.height {
                 let ptype = self.particle_grid[(x, y)].particle_type;
-                self.particle_grid[(x, y)].draw(x, y, base_properties(ptype).base_color);
                 self.particle_grid[(x, y)].updated = false;
                 if base_properties(ptype).movable {
                     self.particle_grid[(x, y)].set_moved(false);
+                }
+
+                self.particle_grid[(x, y)].draw(x, y);
+                if let Some(source) = &self.source_grid[(x, y)] {
+                    source.draw(x, y);
                 }
             }
         }

@@ -1,6 +1,9 @@
 // use color_eyre::eyre::Result;
 use crate::core::*;
-use egui_macroquad::*;
+use egui_macroquad::{
+    egui::{ComboBox, WidgetText},
+    *,
+};
 // use enum_map::{enum_map, Enum, EnumMap};
 use macroquad::prelude::*;
 
@@ -36,6 +39,7 @@ struct Settings {
     brush_size: f32,
     highlight_brush: bool,
     display_fps: bool,
+    placeable_type: Placeable,
     placement_type: ParticleType,
     replace: bool,
 }
@@ -66,6 +70,7 @@ async fn main() {
         brush_size: 1.0,
         highlight_brush: true,
         display_fps: false,
+        placeable_type: Placeable::Particle,
         placement_type: ParticleType::Sand,
         replace: false,
     };
@@ -104,7 +109,7 @@ async fn main() {
 
             // ─── Update All Particles ────────────────────────────────────
             if !settings.paused {
-                world.update_all_particles();
+                world.update_all();
             }
             // ─────────────────────────────────────────────────────────────
         }
@@ -160,7 +165,19 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 if y >= world.height() {
                     continue;
                 }
-                world.add_new_particle(settings.placement_type, x, y, settings.replace);
+                match settings.placeable_type {
+                    Placeable::Particle => {
+                        world.add_new_particle(settings.placement_type, (x, y), settings.replace);
+                    }
+                    Placeable::Source => {
+                        world.add_new_source(
+                            settings.placement_type,
+                            (x, y),
+                            false,
+                            settings.replace,
+                        );
+                    }
+                }
             }
         }
     }
@@ -187,7 +204,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
         world.draw_and_reset_all_particles();
-        world.update_all_particles();
+        world.update_all();
     }
     // Pause/Unpause with space
     if is_key_pressed(KeyCode::Space) {
@@ -270,13 +287,31 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         ui.selectable_value(&mut settings.paused, true, "⏸");
                         ui.selectable_value(&mut settings.paused, false, "▶");
                         if ui.button("⏭").clicked() && settings.paused {
-                            world.update_all_particles();
+                            world.update_all();
                         }
                     });
                 });
                 // ui.allocate_space(ui.);
                 ui.group(|ui| {
                     ui.label(format!("Framerate: {:.1}", fps));
+                });
+            });
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ComboBox::from_label("")
+                        .selected_text(settings.placeable_type.as_str())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut settings.placeable_type,
+                                Placeable::Particle,
+                                "Particle",
+                            );
+                            ui.selectable_value(
+                                &mut settings.placeable_type,
+                                Placeable::Source,
+                                "Source",
+                            );
+                        })
                 });
             });
             ui.group(|ui| {
