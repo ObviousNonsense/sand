@@ -36,8 +36,10 @@ struct Settings {
     brush_size: f32,
     highlight_brush: bool,
     display_fps: bool,
-    placeable_type: Placeable,
+    placeable_selector: PlaceableSelector,
+    sources_replace: bool,
     placement_type: ParticleType,
+    delete: bool,
     replace: bool,
 }
 
@@ -67,8 +69,10 @@ async fn main() {
         brush_size: 1.0,
         highlight_brush: true,
         display_fps: false,
-        placeable_type: Placeable::Particle,
+        placeable_selector: PlaceableSelector::Particle,
+        sources_replace: false,
         placement_type: ParticleType::Sand,
+        delete: false,
         replace: false,
     };
 
@@ -162,17 +166,34 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 if y >= world.height() {
                     continue;
                 }
-                match settings.placeable_type {
-                    Placeable::Particle => {
-                        world.add_new_particle(settings.placement_type, (x, y), settings.replace);
-                    }
-                    Placeable::Source => {
-                        world.add_new_source(
-                            settings.placement_type,
-                            (x, y),
-                            false,
-                            settings.replace,
-                        );
+                if settings.delete {
+                    world.delete_source((x, y));
+                    world.add_new_particle(ParticleType::Empty, (x, y), settings.replace);
+                } else {
+                    match settings.placeable_selector {
+                        PlaceableSelector::Particle => {
+                            world.add_new_particle(
+                                settings.placement_type,
+                                (x, y),
+                                settings.replace,
+                            );
+                        }
+                        PlaceableSelector::Source => {
+                            world.add_new_source(
+                                settings.placement_type,
+                                (x, y),
+                                settings.sources_replace,
+                                settings.replace,
+                            );
+                        }
+                        PlaceableSelector::Sink => {
+                            world.add_new_source(
+                                ParticleType::Empty,
+                                (x, y),
+                                true,
+                                settings.replace,
+                            );
+                        }
                     }
                 }
             }
@@ -269,6 +290,23 @@ fn debug_particle_string(world: &World) -> String {
     format!("({}, {}): {:?}", x, y, p)
 }
 
+#[derive(Debug, PartialEq)]
+enum PlaceableSelector {
+    Particle,
+    Source,
+    Sink,
+}
+
+impl PlaceableSelector {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PlaceableSelector::Particle => "Particle",
+            PlaceableSelector::Source => "Source",
+            PlaceableSelector::Sink => "Sink",
+        }
+    }
+}
+
 fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps: f64) {
     egui::Window::new("")
         .resizable(false)
@@ -293,31 +331,35 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     ui.label(format!("Framerate: {:.1}", fps));
                 });
             });
-            ui.group(|ui| {
-                ui.horizontal(|ui| {
+            ui.horizontal(|ui| {
+                ui.group(|ui| {
                     ComboBox::from_label("")
-                        .selected_text(settings.placeable_type.as_str())
+                        .selected_text(settings.placeable_selector.as_str())
                         .show_ui(ui, |ui| {
                             ui.selectable_value(
-                                &mut settings.placeable_type,
-                                Placeable::Particle,
+                                &mut settings.placeable_selector,
+                                PlaceableSelector::Particle,
                                 "Particle",
                             );
                             ui.selectable_value(
-                                &mut settings.placeable_type,
-                                Placeable::Source,
+                                &mut settings.placeable_selector,
+                                PlaceableSelector::Source,
                                 "Source",
+                            );
+                            ui.selectable_value(
+                                &mut settings.placeable_selector,
+                                PlaceableSelector::Sink,
+                                "Sink",
                             );
                         })
                 });
+                ui.group(|ui| ui.checkbox(&mut settings.sources_replace, "Sources Replace?"));
             });
             ui.group(|ui| {
                 ui.horizontal(|ui| {
-                    ui.selectable_value(
-                        &mut settings.placement_type,
-                        ParticleType::Empty,
-                        "Delete",
-                    );
+                    ui.group(|ui| {
+                        ui.toggle_value(&mut settings.delete, "Delete");
+                    });
                     // ui.style_mut().visuals.
                     // let mut job = egui::text::LayoutJob::default();
                     // job.append(
@@ -328,13 +370,28 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     //         ..Default::default()
                     //     },
                     // );
-                    ui.selectable_value(&mut settings.placement_type, ParticleType::Sand, "Sand");
-                    ui.selectable_value(&mut settings.placement_type, ParticleType::Water, "Water");
-                    ui.selectable_value(
-                        &mut settings.placement_type,
-                        ParticleType::Concrete,
-                        "Concrete",
-                    );
+                    if settings.delete || settings.placeable_selector == PlaceableSelector::Sink {
+                        settings.placement_type = ParticleType::Empty;
+                        ui.label("Sand");
+                        ui.label("Water");
+                        ui.label("Concrete");
+                    } else {
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Sand,
+                            "Sand",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Water,
+                            "Water",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Concrete,
+                            "Concrete",
+                        );
+                    }
                     ui.allocate_space(ui.available_size());
                 });
             });

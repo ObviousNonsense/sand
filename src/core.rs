@@ -8,15 +8,6 @@ pub enum Placeable {
     Source,
 }
 
-impl Placeable {
-    pub fn as_str(&self) -> &str {
-        match self {
-            Placeable::Particle => "Particle",
-            Placeable::Source => "Source",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 // #[repr(usize)]
 pub enum ParticleType {
@@ -257,6 +248,10 @@ impl World {
             particle_type: source_type,
             replaces: source_replaces,
         })
+    }
+
+    pub fn delete_source(&mut self, xy: (usize, usize)) {
+        self.source_grid[xy] = None;
     }
 
     fn try_grid_position(
