@@ -1,6 +1,6 @@
 // use color_eyre::eyre::Result;
 use crate::core::*;
-use egui_macroquad::*;
+use egui_macroquad::{egui::TextFormat, *};
 // use enum_map::{enum_map, Enum, EnumMap};
 use macroquad::prelude::*;
 
@@ -284,6 +284,16 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         ParticleType::Empty,
                         "Delete",
                     );
+                    // ui.style_mut().visuals.
+                    // let mut job = egui::text::LayoutJob::default();
+                    // job.append(
+                    //     "Sand",
+                    //     0.0,
+                    //     TextFormat {
+                    //         background: egui::Color32::YELLOW,
+                    //         ..Default::default()
+                    //     },
+                    // );
                     ui.selectable_value(&mut settings.placement_type, ParticleType::Sand, "Sand");
                     ui.selectable_value(&mut settings.placement_type, ParticleType::Water, "Water");
                     ui.selectable_value(

@@ -250,51 +250,58 @@ impl World {
         for idx in idx_range.iter() {
             let idx = *idx;
             let (x, y) = self.index_to_xy(idx);
-            let particle = self.grid[(x, y)].clone();
+            let particle_clone = self.grid[(x, y)].clone();
 
-            if particle.updated {
+            if particle_clone.updated {
                 continue;
             }
 
             self.grid[(x, y)].updated = true;
-            match particle.particle_type {
+            match particle_clone.particle_type {
                 ParticleType::Sand => {
-                    if particle.moved().unwrap() {
-                        continue;
-                    }
-                    let r = self.rng.gen();
-                    let right: isize = if r { -1 } else { 1 };
-                    let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
-
-                    for (dx, dy) in check_directions.iter() {
-                        let (other_x, other_y) =
-                            ((x as isize + dx) as usize, (y as isize + dy) as usize);
-                        self.try_grid_position(x, y, other_x, other_y, true);
-                    }
+                    self.sand_movement(x, y, &particle_clone);
                 }
                 ParticleType::Water => {
-                    if particle.moved().unwrap() {
-                        continue;
-                    }
-                    let r = self.rng.gen();
-                    let right: isize = if r { -1 } else { 1 };
-
-                    let check_directions = if particle.moving_right().unwrap() {
-                        [(0, 1), (right, 1), (0 - right, 1), (1, 0), (-1, 0)]
-                    } else {
-                        [(0, 1), (right, 1), (0 - right, 1), (-1, 0), (1, 0)]
-                    };
-
-                    for ((dx, dy), k) in check_directions.iter().zip(0..5) {
-                        let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
-                        let moved = self.try_grid_position(x, y, other_x, other_y, true);
-
-                        if moved && k == 4 {
-                            self.grid[(other_x, other_y)].toggle_moving_right();
-                        }
-                    }
+                    self.fluid_movement(x, y, &particle_clone);
                 }
                 _ => {}
+            }
+        }
+    }
+
+    fn sand_movement(&mut self, x: usize, y: usize, particle_clone: &Particle) {
+        if particle_clone.moved().unwrap() {
+            return;
+        }
+        let r = self.rng.gen();
+        let right: isize = if r { -1 } else { 1 };
+        let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+
+        for (dx, dy) in check_directions.iter() {
+            let (other_x, other_y) = ((x as isize + dx) as usize, (y as isize + dy) as usize);
+            self.try_grid_position(x, y, other_x, other_y, true);
+        }
+    }
+
+    fn fluid_movement(&mut self, x: usize, y: usize, particle_clone: &Particle) {
+        if particle_clone.moved().unwrap() {
+            return;
+        }
+        let r = self.rng.gen();
+        let right: isize = if r { -1 } else { 1 };
+
+        let check_directions = if particle_clone.moving_right().unwrap() {
+            [(0, 1), (right, 1), (0 - right, 1), (1, 0), (-1, 0)]
+        } else {
+            [(0, 1), (right, 1), (0 - right, 1), (-1, 0), (1, 0)]
+        };
+
+        for ((dx, dy), k) in check_directions.iter().zip(0..5) {
+            let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
+            let moved = self.try_grid_position(x, y, other_x, other_y, true);
+
+            if moved && k == 4 {
+                self.grid[(other_x, other_y)].toggle_moving_right();
             }
         }
     }
