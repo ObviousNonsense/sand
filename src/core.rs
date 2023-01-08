@@ -163,8 +163,8 @@ impl World {
         self.height
     }
 
-    pub fn particle_at(&self, x: usize, y: usize) -> &Particle {
-        &self.grid[(x, y)]
+    pub fn particle_at(&self, xy: (usize, usize)) -> &Particle {
+        &self.grid[xy]
     }
 
     pub fn add_new_particle(&mut self, new_particle_type: ParticleType, x: usize, y: usize) {
@@ -182,62 +182,61 @@ impl World {
 
     fn try_grid_position(
         &mut self,
-        x1: usize,
-        y1: usize,
-        x2: usize,
-        y2: usize,
+        xy1: (usize, usize),
+        xy2: (usize, usize),
         try_swap: bool,
     ) -> bool {
-        let other_p = self.particle_at(x2, y2);
-        let my_weight = self.weight_at(x1, y1);
-        let other_weight = self.weight_at(x2, y2);
+        let other_p = self.particle_at(xy2);
+        let my_weight = self.weight_at(xy1);
+        let other_weight = self.weight_at(xy2);
         if other_p.particle_type == ParticleType::Empty {
             if my_weight * self.rng.gen::<f32>() > other_weight {
-                self.grid[(x1, y1)].set_moved(true);
-                self.swap_particles(x1, y1, x2, y2);
+                self.grid[xy1].set_moved(true);
+                self.swap_particles(xy1, xy2);
                 return true;
             }
-        } else if try_swap && self.movable_at(x2, y2) && !other_p.updated {
+        } else if try_swap && self.movable_at(xy2) && !other_p.updated {
             if my_weight * self.rng.gen::<f32>() > other_weight {
-                self.grid[(x1, y1)].set_moved(true);
-                self.grid[(x2, y2)].set_moved(true);
+                self.grid[xy1].set_moved(true);
+                self.grid[xy2].set_moved(true);
                 // self.swap_particles(x1, y1, x2, y2);
-                self.displace_particle(x1, y1, x2, y2);
+                self.displace_particle(xy1, xy2);
                 return true;
             }
         }
         false
     }
 
-    fn displace_particle(&mut self, x1: usize, y1: usize, x2: usize, y2: usize) {
+    fn displace_particle(&mut self, xy1: (usize, usize), xy2: (usize, usize)) {
         let positions_to_try = vec![[0, 1], [1, 1], [-1, 1], [1, 0], [-1, 0]];
         let mut moved = false;
         for pos in positions_to_try {
-            let x3 = (x2 as isize + pos[0]) as usize;
-            let y3 = (y2 as isize + pos[1]) as usize;
-            moved = self.try_grid_position(x2, y2, x3, y3, false);
+            let xy3 = (
+                (xy2.0 as isize + pos[0]) as usize,
+                (xy2.1 as isize + pos[1]) as usize,
+            );
+            moved = self.try_grid_position(xy2, xy3, false);
             if moved {
-                self.grid[(x3, y3)].set_moved(true);
+                self.grid[xy3].set_moved(true);
                 break;
             }
         }
         if !moved {
-            self.grid[(x2, y2)].set_moved(true);
+            self.grid[xy2].set_moved(true);
         }
-        self.swap_particles(x1, y1, x2, y2);
+        self.swap_particles(xy1, xy2);
     }
 
-    fn swap_particles(&mut self, x1: usize, y1: usize, x2: usize, y2: usize) {
-        (self.grid[(x1, y1)], self.grid[(x2, y2)]) =
-            (self.grid[(x2, y2)].clone(), self.grid[(x1, y1)].clone());
+    fn swap_particles(&mut self, xy1: (usize, usize), xy2: (usize, usize)) {
+        (self.grid[xy1], self.grid[xy2]) = (self.grid[xy2].clone(), self.grid[xy1].clone());
     }
 
-    fn weight_at(&self, x: usize, y: usize) -> f32 {
-        base_properties(self.grid[(x, y)].particle_type).weight
+    fn weight_at(&self, xy: (usize, usize)) -> f32 {
+        base_properties(self.grid[xy].particle_type).weight
     }
 
-    fn movable_at(&self, x: usize, y: usize) -> bool {
-        base_properties(self.grid[(x, y)].particle_type).movable
+    fn movable_at(&self, xy: (usize, usize)) -> bool {
+        base_properties(self.grid[xy].particle_type).movable
     }
 
     pub fn update_all_particles(&mut self) {
@@ -249,27 +248,27 @@ impl World {
         idx_range.shuffle(&mut self.rng);
         for idx in idx_range.iter() {
             let idx = *idx;
-            let (x, y) = self.index_to_xy(idx);
-            let particle_clone = self.grid[(x, y)].clone();
+            let xy = self.index_to_xy(idx);
+            let particle_clone = self.grid[xy].clone();
 
             if particle_clone.updated {
                 continue;
             }
 
-            self.grid[(x, y)].updated = true;
+            self.grid[xy].updated = true;
             match particle_clone.particle_type {
                 ParticleType::Sand => {
-                    self.sand_movement(x, y, &particle_clone);
+                    self.sand_movement(xy, &particle_clone);
                 }
                 ParticleType::Water => {
-                    self.fluid_movement(x, y, &particle_clone);
+                    self.fluid_movement(xy, &particle_clone);
                 }
                 _ => {}
             }
         }
     }
 
-    fn sand_movement(&mut self, x: usize, y: usize, particle_clone: &Particle) {
+    fn sand_movement(&mut self, xy: (usize, usize), particle_clone: &Particle) {
         if particle_clone.moved().unwrap() {
             return;
         }
@@ -278,12 +277,12 @@ impl World {
         let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
 
         for (dx, dy) in check_directions.iter() {
-            let (other_x, other_y) = ((x as isize + dx) as usize, (y as isize + dy) as usize);
-            self.try_grid_position(x, y, other_x, other_y, true);
+            let other_xy = ((xy.0 as isize + dx) as usize, (xy.1 as isize + dy) as usize);
+            self.try_grid_position(xy, other_xy, true);
         }
     }
 
-    fn fluid_movement(&mut self, x: usize, y: usize, particle_clone: &Particle) {
+    fn fluid_movement(&mut self, xy: (usize, usize), particle_clone: &Particle) {
         if particle_clone.moved().unwrap() {
             return;
         }
@@ -297,11 +296,11 @@ impl World {
         };
 
         for ((dx, dy), k) in check_directions.iter().zip(0..5) {
-            let (other_x, other_y) = ((x as isize + dx) as usize, y + dy);
-            let moved = self.try_grid_position(x, y, other_x, other_y, true);
+            let other_xy = ((xy.0 as isize + dx) as usize, xy.1 + dy);
+            let moved = self.try_grid_position(xy, other_xy, true);
 
             if moved && k == 4 {
-                self.grid[(other_x, other_y)].toggle_moving_right();
+                self.grid[other_xy].toggle_moving_right();
             }
         }
     }

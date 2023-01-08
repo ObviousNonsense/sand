@@ -1,6 +1,6 @@
 // use color_eyre::eyre::Result;
 use crate::core::*;
-use egui_macroquad::{egui::TextFormat, *};
+use egui_macroquad::*;
 // use enum_map::{enum_map, Enum, EnumMap};
 use macroquad::prelude::*;
 
@@ -249,7 +249,7 @@ fn mouse_location(grid_width: usize, grid_height: usize) -> (usize, usize) {
 fn debug_particle_string(world: &World) -> String {
     // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
     let (x, y) = mouse_location(world.width(), world.height());
-    let p = world.particle_at(x, y);
+    let p = world.particle_at((x, y));
     format!("({}, {}): {:?}", x, y, p)
 }
 
