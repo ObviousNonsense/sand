@@ -12,6 +12,15 @@ pub enum ParticleType {
     Concrete,
 }
 
+#[derive(Debug, Clone, Copy)]
+// The immutable properties of a particle type
+pub struct ParticleTypeProperties {
+    pub base_color: Color,
+    pub weight: f32,
+    movable: bool,
+    fluid: bool,
+}
+
 pub fn base_properties(particle_type: ParticleType) -> ParticleTypeProperties {
     match particle_type {
         ParticleType::Border => ParticleTypeProperties {
@@ -19,35 +28,30 @@ pub fn base_properties(particle_type: ParticleType) -> ParticleTypeProperties {
             weight: f32::INFINITY,
             movable: false,
             fluid: false,
-            // replaceable: false,
         },
         ParticleType::Concrete => ParticleTypeProperties {
             base_color: GRAY,
             weight: f32::INFINITY,
             movable: false,
             fluid: false,
-            // replaceable: true,
         },
         ParticleType::Empty => ParticleTypeProperties {
             base_color: Color::new(0.2, 0.2, 0.2, 1.0),
-            weight: 0.0,
+            weight: 1.0,
             movable: false,
             fluid: false,
-            // replaceable: true,
         },
         ParticleType::Sand => ParticleTypeProperties {
             base_color: YELLOW,
             weight: 90.0,
             movable: true,
             fluid: false,
-            // replaceable: true,
         },
         ParticleType::Water { .. } => ParticleTypeProperties {
             base_color: BLUE,
             weight: 60.0,
             movable: true,
             fluid: true,
-            // replaceable: true,
         },
     }
 }
@@ -117,18 +121,9 @@ impl Particle {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-// The immutable properties of a particle type
-pub struct ParticleTypeProperties {
-    pub base_color: Color,
-    pub weight: f32,
-    movable: bool,
-    fluid: bool,
-}
-
 // ─── World ─────────────────────────────────────────────────────────────────────────────────── ✣ ─
 pub struct World {
-    grid: Array2D<Particle>,
+    particle_grid: Array2D<Particle>,
     width: usize,
     height: usize,
     rng: ThreadRng,
@@ -148,7 +143,7 @@ impl World {
         }
 
         Self {
-            grid,
+            particle_grid: grid,
             width,
             height,
             rng: thread_rng(),
@@ -164,7 +159,7 @@ impl World {
     }
 
     pub fn particle_at(&self, xy: (usize, usize)) -> &Particle {
-        &self.grid[xy]
+        &self.particle_grid[xy]
     }
 
     pub fn add_new_particle(
@@ -174,16 +169,16 @@ impl World {
         y: usize,
         replace: bool,
     ) {
-        let old_particle_type = self.grid[(x, y)].particle_type;
+        let old_particle_type = self.particle_grid[(x, y)].particle_type;
 
         match (new_particle_type, old_particle_type) {
             (_, ParticleType::Border) => {}
             (ParticleType::Empty, _) | (_, ParticleType::Empty) => {
-                self.grid[(x, y)] = Particle::new(new_particle_type);
+                self.particle_grid[(x, y)] = Particle::new(new_particle_type);
             }
             _ => {
                 if replace {
-                    self.grid[(x, y)] = Particle::new(new_particle_type);
+                    self.particle_grid[(x, y)] = Particle::new(new_particle_type);
                 }
             }
         }
@@ -200,14 +195,14 @@ impl World {
         let other_weight = self.weight_at(xy2);
         if other_p.particle_type == ParticleType::Empty {
             if my_weight * self.rng.gen::<f32>() > other_weight {
-                self.grid[xy1].set_moved(true);
+                self.particle_grid[xy1].set_moved(true);
                 self.swap_particles(xy1, xy2);
                 return true;
             }
         } else if try_swap && self.movable_at(xy2) && !other_p.updated {
             if my_weight * self.rng.gen::<f32>() > other_weight {
-                self.grid[xy1].set_moved(true);
-                self.grid[xy2].set_moved(true);
+                self.particle_grid[xy1].set_moved(true);
+                self.particle_grid[xy2].set_moved(true);
                 // self.swap_particles(x1, y1, x2, y2);
                 self.displace_particle(xy1, xy2);
                 return true;
@@ -226,26 +221,29 @@ impl World {
             );
             moved = self.try_grid_position(xy2, xy3, false);
             if moved {
-                self.grid[xy3].set_moved(true);
+                self.particle_grid[xy3].set_moved(true);
                 break;
             }
         }
         if !moved {
-            self.grid[xy2].set_moved(true);
+            self.particle_grid[xy2].set_moved(true);
         }
         self.swap_particles(xy1, xy2);
     }
 
     fn swap_particles(&mut self, xy1: (usize, usize), xy2: (usize, usize)) {
-        (self.grid[xy1], self.grid[xy2]) = (self.grid[xy2].clone(), self.grid[xy1].clone());
+        (self.particle_grid[xy1], self.particle_grid[xy2]) = (
+            self.particle_grid[xy2].clone(),
+            self.particle_grid[xy1].clone(),
+        );
     }
 
     fn weight_at(&self, xy: (usize, usize)) -> f32 {
-        base_properties(self.grid[xy].particle_type).weight
+        base_properties(self.particle_grid[xy].particle_type).weight
     }
 
     fn movable_at(&self, xy: (usize, usize)) -> bool {
-        base_properties(self.grid[xy].particle_type).movable
+        base_properties(self.particle_grid[xy].particle_type).movable
     }
 
     pub fn update_all_particles(&mut self) {
@@ -258,13 +256,13 @@ impl World {
         for idx in idx_range.iter() {
             let idx = *idx;
             let xy = self.index_to_xy(idx);
-            let particle_clone = self.grid[xy].clone();
+            let particle_clone = self.particle_grid[xy].clone();
 
             if particle_clone.updated {
                 continue;
             }
 
-            self.grid[xy].updated = true;
+            self.particle_grid[xy].updated = true;
             match particle_clone.particle_type {
                 ParticleType::Sand => {
                     self.sand_movement(xy, &particle_clone);
@@ -309,7 +307,7 @@ impl World {
             let moved = self.try_grid_position(xy, other_xy, true);
 
             if moved && k == 4 {
-                self.grid[other_xy].toggle_moving_right();
+                self.particle_grid[other_xy].toggle_moving_right();
             }
         }
     }
@@ -317,11 +315,11 @@ impl World {
     pub fn draw_and_reset_all_particles(&mut self) {
         for x in 0..self.width {
             for y in 0..self.height {
-                let ptype = self.grid[(x, y)].particle_type;
-                self.grid[(x, y)].draw(x, y, base_properties(ptype).base_color);
-                self.grid[(x, y)].updated = false;
+                let ptype = self.particle_grid[(x, y)].particle_type;
+                self.particle_grid[(x, y)].draw(x, y, base_properties(ptype).base_color);
+                self.particle_grid[(x, y)].updated = false;
                 if base_properties(ptype).movable {
-                    self.grid[(x, y)].set_moved(false);
+                    self.particle_grid[(x, y)].set_moved(false);
                 }
             }
         }
