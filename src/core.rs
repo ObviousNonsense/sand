@@ -2,11 +2,11 @@ use super::*;
 use ::rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
 use array2d::Array2D;
 
-#[derive(Debug, PartialEq)]
-pub enum Placeable {
-    Particle,
-    Source,
-}
+// #[derive(Debug, PartialEq)]
+// pub enum Placeable {
+//     Particle,
+//     Source,
+// }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 // #[repr(usize)]
@@ -163,10 +163,55 @@ impl ParticleSource {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Direction {
+    UP,
+    RIGHT,
+    DOWN,
+    LEFT,
+}
+
+impl Direction {
+    fn dxdy(&self) -> (isize, isize) {
+        match self {
+            Direction::UP => (0, -1),
+            Direction::RIGHT => (1, 0),
+            Direction::DOWN => (0, 1),
+            Direction::LEFT => (-1, 0),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Portal {
+    partner_xy: Option<(usize, usize)>,
+    // if you're standing where the portal is, which direction do you go to walk through it
+    direction: Direction,
+    color: Color,
+}
+
+impl Portal {
+    fn draw(&self, x: usize, y: usize) {
+        let (px, py) = xy_to_pixels(x, y);
+        // draw_line()
+        let pix_per = PIXELS_PER_PARTICLE;
+        let thickness = pix_per / 4.0;
+        let (ptx, pty, w, h): (f32, f32, f32, f32) = match self.direction {
+            Direction::UP => (px, py, pix_per, thickness),
+            Direction::RIGHT => (px + pix_per - thickness, py, thickness, pix_per),
+            Direction::DOWN => (px, py + pix_per - thickness, pix_per, thickness),
+            Direction::LEFT => (px, py, thickness, pix_per),
+        };
+
+        draw_rectangle(ptx, pty, w, h, self.color)
+    }
+}
+
 // ─── World ─────────────────────────────────────────────────────────────────────────────────── ✣ ─
 pub struct World {
     particle_grid: Array2D<Particle>,
     source_grid: Array2D<Option<ParticleSource>>,
+    portal_grid: Array2D<Option<Portal>>,
     width: usize,
     height: usize,
     rng: ThreadRng,
@@ -179,6 +224,7 @@ impl World {
         let mut particle_grid =
             Array2D::filled_with(Particle::new(ParticleType::Empty, &mut rng), width, height);
         let source_grid = Array2D::filled_with(None, width, height);
+        let portal_grid = Array2D::filled_with(None, width, height);
 
         for y in 0..height {
             for x in 0..width {
@@ -192,6 +238,7 @@ impl World {
         Self {
             particle_grid,
             source_grid,
+            portal_grid,
             width,
             height,
             rng,
@@ -250,6 +297,33 @@ impl World {
         })
     }
 
+    pub fn add_new_portal(
+        &mut self,
+        xy: (usize, usize),
+        partner_xy: Option<(usize, usize)>,
+        direction: Direction,
+        color: Color,
+    ) -> bool {
+        if let Some(_) = self.portal_grid[xy] {
+            return false;
+        }
+
+        if let Some(partner_xy) = partner_xy {
+            if let Some(ref mut partner) = self.portal_grid[partner_xy] {
+                partner.partner_xy = Some(xy);
+            } else {
+                unreachable!("New portal purported partner does not exist")
+            }
+        }
+
+        self.portal_grid[xy] = Some(Portal {
+            partner_xy,
+            direction,
+            color,
+        });
+        true
+    }
+
     pub fn delete_source(&mut self, xy: (usize, usize)) {
         self.source_grid[xy] = None;
     }
@@ -264,6 +338,7 @@ impl World {
         let my_weight = self.weight_at(xy1);
         let other_weight = self.weight_at(xy2);
         if other_p.particle_type == ParticleType::Empty {
+            // This won't work with the way I want to implement portals
             if xy1.1 == xy2.1 || my_weight * self.rng.gen::<f32>() > other_weight {
                 self.particle_grid[xy1].set_moved(true);
                 self.swap_particles(xy1, xy2);
@@ -282,13 +357,10 @@ impl World {
     }
 
     fn displace_particle(&mut self, xy1: (usize, usize), xy2: (usize, usize)) {
-        let positions_to_try = vec![[0, 1], [1, 1], [-1, 1], [1, 0], [-1, 0]];
+        let positions_to_try = vec![(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)];
         let mut moved = false;
         for pos in positions_to_try {
-            let xy3 = (
-                (xy2.0 as isize + pos[0]) as usize,
-                (xy2.1 as isize + pos[1]) as usize,
-            );
+            let xy3 = self.relative_xy(xy2, pos);
             moved = self.try_grid_position(xy2, xy3, false);
             if moved {
                 self.particle_grid[xy3].set_moved(true);
@@ -363,6 +435,26 @@ impl World {
         }
     }
 
+    fn relative_xy(&self, xy: (usize, usize), dxdy: (isize, isize)) -> (usize, usize) {
+        // dbg!(xy, dxdy);
+        match &self.portal_grid[xy] {
+            Some(portal) => {
+                if let Some(xy2) = portal.partner_xy {
+                    let portal_dxdy = portal.direction.dxdy();
+                    // dbg!(xy2, portal_dxdy);
+                    if portal_dxdy.0 == dxdy.0 && portal_dxdy.1 == dxdy.1 {
+                        return xy2;
+                    }
+                }
+            }
+            None => {}
+        };
+        (
+            (xy.0 as isize + dxdy.0) as usize,
+            (xy.1 as isize + dxdy.1) as usize,
+        )
+    }
+
     fn sand_movement(&mut self, xy: (usize, usize), particle_clone: Particle) {
         if particle_clone.moved().unwrap() {
             return;
@@ -371,8 +463,8 @@ impl World {
         let right: isize = if r { -1 } else { 1 };
         let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
 
-        for (dx, dy) in check_directions.iter() {
-            let other_xy = ((xy.0 as isize + dx) as usize, (xy.1 as isize + dy) as usize);
+        for dxdy in check_directions.iter() {
+            let other_xy = self.relative_xy(xy, *dxdy);
             let moved = self.try_grid_position(xy, other_xy, true);
             if moved {
                 break;
@@ -393,8 +485,8 @@ impl World {
             [(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)]
         };
 
-        for ((dx, dy), k) in check_directions.iter().zip(0..5) {
-            let other_xy = ((xy.0 as isize + dx) as usize, xy.1 + dy);
+        for (dxdy, k) in check_directions.iter().zip(0..5) {
+            let other_xy = self.relative_xy(xy, *dxdy);
             let moved = self.try_grid_position(xy, other_xy, true);
 
             if moved {
@@ -416,6 +508,9 @@ impl World {
                 }
 
                 self.particle_grid[(x, y)].draw(x, y);
+                if let Some(portal) = &self.portal_grid[(x, y)] {
+                    portal.draw(x, y);
+                }
                 if let Some(source) = &self.source_grid[(x, y)] {
                     source.draw(x, y);
                 }

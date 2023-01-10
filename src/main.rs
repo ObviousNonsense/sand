@@ -7,10 +7,10 @@ use macroquad::prelude::*;
 mod core;
 // mod world;
 
-const GRID_WIDTH_: usize = 100;
-const GRID_HEIGHT_: usize = 100;
+const GRID_WIDTH_: usize = 50;
+const GRID_HEIGHT_: usize = 50;
 // const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
-const PIXELS_PER_PARTICLE: f32 = 6.0;
+const PIXELS_PER_PARTICLE: f32 = 8.0;
 const WORLD_PX0: f32 = 300.0;
 const WORLD_PY0: f32 = 0.0;
 
@@ -41,6 +41,9 @@ struct Settings {
     placement_type: ParticleType,
     delete: bool,
     replace: bool,
+    portal_direction: Direction,
+    debug_mode: bool,
+    last_portal_placed: Option<(usize, usize)>,
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────── ✣ ─
@@ -74,6 +77,9 @@ async fn main() {
         placement_type: ParticleType::Sand,
         delete: false,
         replace: false,
+        portal_direction: Direction::DOWN,
+        debug_mode: false,
+        last_portal_placed: None,
     };
 
     loop {
@@ -194,6 +200,26 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                                 settings.replace,
                             );
                         }
+                        PlaceableSelector::Portal => {
+                            let added = world.add_new_portal(
+                                (x, y),
+                                settings.last_portal_placed,
+                                settings.portal_direction,
+                                RED,
+                            );
+                            if added {
+                                println!(
+                                    "Creating Portal at {:?} with partner at {:?}",
+                                    (x, y),
+                                    settings.last_portal_placed,
+                                );
+                                let last_portal_placed = match settings.last_portal_placed {
+                                    Some(_) => None,
+                                    None => Some((x, y)),
+                                };
+                                settings.last_portal_placed = last_portal_placed;
+                            }
+                        }
                     }
                 }
             }
@@ -295,6 +321,7 @@ enum PlaceableSelector {
     Particle,
     Source,
     Sink,
+    Portal,
 }
 
 impl PlaceableSelector {
@@ -303,6 +330,7 @@ impl PlaceableSelector {
             PlaceableSelector::Particle => "Particle",
             PlaceableSelector::Source => "Source",
             PlaceableSelector::Sink => "Sink",
+            PlaceableSelector::Portal => "Portal",
         }
     }
 }
@@ -318,18 +346,19 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
             // ui.label("Test");
             ui.horizontal(|ui| {
                 ui.group(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.selectable_value(&mut settings.paused, true, "⏸");
-                        ui.selectable_value(&mut settings.paused, false, "▶");
-                        if ui.button("⏭").clicked() && settings.paused {
-                            world.update_all();
-                        }
-                    });
+                    // ui.horizontal(|ui| {
+                    ui.selectable_value(&mut settings.paused, true, "⏸");
+                    ui.selectable_value(&mut settings.paused, false, "▶");
+                    if ui.button("⏭").clicked() && settings.paused {
+                        world.update_all();
+                    }
+                    // });
                 });
                 // ui.allocate_space(ui.);
                 ui.group(|ui| {
                     ui.label(format!("Framerate: {:.1}", fps));
                 });
+                ui.group(|ui| ui.checkbox(&mut settings.debug_mode, "debug"));
             });
             ui.horizontal(|ui| {
                 ui.group(|ui| {
@@ -351,15 +380,24 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                                 PlaceableSelector::Sink,
                                 "Sink",
                             );
+                            ui.selectable_value(
+                                &mut settings.placeable_selector,
+                                PlaceableSelector::Portal,
+                                "Portal",
+                            );
                         })
                 });
-                ui.group(|ui| ui.checkbox(&mut settings.sources_replace, "Sources Replace?"));
+                if settings.placeable_selector == PlaceableSelector::Source {
+                    ui.group(|ui| {
+                        ui.checkbox(&mut settings.sources_replace, "New Sources Replace?")
+                    });
+                }
+            });
+            ui.group(|ui| {
+                ui.toggle_value(&mut settings.delete, "Delete");
             });
             ui.group(|ui| {
                 ui.horizontal(|ui| {
-                    ui.group(|ui| {
-                        ui.toggle_value(&mut settings.delete, "Delete");
-                    });
                     // ui.style_mut().visuals.
                     // let mut job = egui::text::LayoutJob::default();
                     // job.append(
@@ -370,7 +408,27 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     //         ..Default::default()
                     //     },
                     // );
-                    if settings.delete || settings.placeable_selector == PlaceableSelector::Sink {
+                    if settings.placeable_selector == PlaceableSelector::Portal {
+                        ui.label("Portal Direction: ");
+                        ui.selectable_value(&mut settings.portal_direction, Direction::UP, "Up");
+                        ui.selectable_value(
+                            &mut settings.portal_direction,
+                            Direction::RIGHT,
+                            "Right",
+                        );
+                        ui.selectable_value(
+                            &mut settings.portal_direction,
+                            Direction::DOWN,
+                            "Down",
+                        );
+                        ui.selectable_value(
+                            &mut settings.portal_direction,
+                            Direction::LEFT,
+                            "Left",
+                        );
+                    } else if settings.delete
+                        || settings.placeable_selector == PlaceableSelector::Sink
+                    {
                         settings.placement_type = ParticleType::Empty;
                         ui.label("Sand");
                         ui.label("Water");
@@ -395,8 +453,8 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     ui.allocate_space(ui.available_size());
                 });
             });
-            ui.group(|ui| {
-                ui.horizontal(|ui| {
+            ui.horizontal(|ui| {
+                ui.group(|ui| {
                     ui.label("Brush Size: ");
                     ui.add(
                         egui::DragValue::new(&mut settings.brush_size)
@@ -410,15 +468,17 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     if ui.button("➖").clicked() {
                         settings.brush_size -= 1.0;
                     }
-                    ui.allocate_space(ui.available_size());
                 });
-                ui.horizontal(|ui| {
+                ui.group(|ui| {
                     ui.checkbox(&mut settings.replace, "Replace");
-                })
+                });
+                ui.allocate_space(ui.available_size());
             });
-            ui.group(|ui| {
-                ui.label(debug_particle_string(world));
-            });
+            if settings.debug_mode {
+                ui.group(|ui| {
+                    ui.label(debug_particle_string(world));
+                });
+            }
             ui.allocate_space(ui.available_size());
         });
 }
