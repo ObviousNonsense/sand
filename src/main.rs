@@ -261,6 +261,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
     }
     // Reset on "R"
     if is_key_pressed(KeyCode::R) {
+        settings.last_portal_placed = None;
         *world = World::new(world.width(), world.height());
     }
     // Toggle highlighting with "H"
