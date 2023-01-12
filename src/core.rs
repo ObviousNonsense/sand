@@ -391,6 +391,13 @@ impl World {
         true
     }
 
+    pub fn portal_exists_at(&self, xy: (usize, usize)) -> bool {
+        if let Some(_) = self.portal_grid[xy] {
+            return true;
+        }
+        false
+    }
+
     // ─── Deletion Methods ────────────────────────────────────────────────────────────────
     pub fn delete_source(&mut self, xy: (usize, usize)) {
         self.source_grid[xy] = None;

@@ -34,7 +34,6 @@ fn window_conf() -> Conf {
 struct Settings {
     paused: bool,
     brush_size: f32,
-    // highlight_brush: bool,
     display_fps: bool,
     placeable_selector: PlaceableSelector,
     sources_replace: bool,
@@ -43,8 +42,10 @@ struct Settings {
     replace: bool,
     debug_mode: bool,
     portal_direction: Direction,
-    last_portal_placed: Option<(usize, usize)>,
+    last_portal_placed: Vec<(usize, usize)>,
+    waiting_for_partner_portal: bool,
     portal_color: Color,
+    portal_placement_valid: bool,
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────── ✣ ─
@@ -71,7 +72,6 @@ async fn main() {
     let mut settings = Settings {
         paused: false,
         brush_size: 1.0,
-        // highlight_brush: true,
         display_fps: false,
         placeable_selector: PlaceableSelector::Particle,
         sources_replace: false,
@@ -80,8 +80,10 @@ async fn main() {
         replace: false,
         debug_mode: false,
         portal_direction: Direction::DOWN,
-        last_portal_placed: None,
+        last_portal_placed: vec![],
+        waiting_for_partner_portal: false,
         portal_color: RED,
+        portal_placement_valid: true,
     };
 
     loop {
@@ -169,6 +171,29 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
         let mousex_avg = ((mousex_min as f32 + mousex_max as f32) / 2.0).floor() as usize;
         let mousey_avg = ((mousey_min as f32 + mousey_max as f32) / 2.0).floor() as usize;
 
+        // Check whether the location/size of the portal we're trying to place is valid
+        settings.portal_placement_valid = true;
+        if settings.placeable_selector == PlaceableSelector::Portal {
+            match settings.portal_direction {
+                Direction::UP | Direction::DOWN => {
+                    for x in mousex_min..mousex_max {
+                        if world.portal_exists_at((x, mousey_avg)) {
+                            settings.portal_placement_valid = false;
+                            break;
+                        }
+                    }
+                }
+                Direction::RIGHT | Direction::LEFT => {
+                    for y in mousey_min..mousey_max {
+                        if world.portal_exists_at((mousex_avg, y)) {
+                            settings.portal_placement_valid = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         // println!("Brush span = {}", brush_span);
         for x in mousex_min..mousex_max {
             // println!("x = {}", x);
@@ -189,7 +214,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                         world.delete_source((x, y));
                         world.add_new_particle(ParticleType::Empty, (x, y), settings.replace);
                     } else {
-                        create_placeable(settings, world, (x, y));
+                        create_placeable(settings, world, (x, y), mousex_avg, mousey_avg);
                     }
                 }
             }
@@ -212,7 +237,8 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
     }
     // Reset on "R"
     if is_key_pressed(KeyCode::R) {
-        settings.last_portal_placed = None;
+        settings.last_portal_placed = vec![];
+        settings.waiting_for_partner_portal = false;
         *world = World::new(world.width(), world.height());
     }
 
@@ -227,7 +253,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
     }
 }
 
-fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex_max: usize, mousey_max: usize) {
+fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mousey: usize) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
             let mut color = base_properties(settings.placement_type).base_color;
@@ -251,14 +277,17 @@ fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex_max: usize, m
             draw_source(x, y, color, settings.sources_replace, true);
         }
         PlaceableSelector::Portal => {
+            if !settings.portal_placement_valid {
+                return;
+            }
             match settings.portal_direction {
                 Direction::UP | Direction::DOWN => {
-                    if y != mousey_max {
+                    if y != mousey {
                         return;
                     }
                 }
                 Direction::RIGHT | Direction::LEFT => {
-                    if x != mousex_max {
+                    if x != mousex {
                         return;
                     }
                 }
@@ -270,7 +299,13 @@ fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex_max: usize, m
     }
 }
 
-fn create_placeable(settings: &mut Settings, world: &mut World, xy: (usize, usize)) {
+fn create_placeable(
+    settings: &mut Settings,
+    world: &mut World,
+    xy: (usize, usize),
+    mousex: usize,
+    mousey: usize,
+) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
             world.add_new_particle(settings.placement_type, xy, settings.replace);
@@ -287,22 +322,65 @@ fn create_placeable(settings: &mut Settings, world: &mut World, xy: (usize, usiz
             world.add_new_source(ParticleType::Empty, xy, true, settings.replace);
         }
         PlaceableSelector::Portal => {
-            let added = world.add_new_portal(
-                xy,
-                settings.last_portal_placed,
-                settings.portal_direction,
-                RED,
+            if !settings.portal_placement_valid {
+                return;
+            }
+
+            match settings.portal_direction {
+                Direction::UP | Direction::DOWN => {
+                    if xy.1 != mousey {
+                        return;
+                    }
+                }
+                Direction::RIGHT | Direction::LEFT => {
+                    if xy.0 != mousex {
+                        return;
+                    }
+                }
+            }
+
+            println!(
+                "Before: waiting for partner = {}",
+                settings.waiting_for_partner_portal
             );
+
+            let partner_xy;
+            if settings.waiting_for_partner_portal {
+                partner_xy = settings.last_portal_placed.pop()
+            } else {
+                partner_xy = None;
+            }
+
+            // TODO: Since I'm checking in advance whether there's already a
+            // portal there now, checking again here is redundant
+            let added = world.add_new_portal(xy, partner_xy, settings.portal_direction, RED);
+
             if added {
+                if !settings.waiting_for_partner_portal {
+                    settings.last_portal_placed.push(xy);
+                } else if settings.last_portal_placed.is_empty() {
+                    settings.waiting_for_partner_portal = false;
+                }
+
+                if settings.last_portal_placed.len() == settings.brush_size as usize {
+                    settings.waiting_for_partner_portal = true;
+                }
+                // let last_portal_placed = match settings.last_portal_placed {
+                //     Some(_) => None,
+                //     None => Some(xy),
+                // };
+                // settings.last_portal_placed = last_portal_placed;
+
                 println!(
                     "Creating Portal at {:?} with partner at {:?}",
-                    xy, settings.last_portal_placed,
+                    xy, partner_xy,
                 );
-                let last_portal_placed = match settings.last_portal_placed {
-                    Some(_) => None,
-                    None => Some(xy),
-                };
-                settings.last_portal_placed = last_portal_placed;
+                println!("Last Portal placed = {:?}", settings.last_portal_placed);
+                println!(
+                    "After: waiting for partner = {}",
+                    settings.waiting_for_partner_portal
+                );
+                println!("------------------------------")
             }
         }
     }
