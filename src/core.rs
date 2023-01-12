@@ -43,7 +43,7 @@ pub fn base_properties(particle_type: ParticleType) -> ParticleTypeProperties {
         },
         ParticleType::Empty => ParticleTypeProperties {
             base_color: Color::new(0.2, 0.2, 0.2, 1.0),
-            weight: 0.0,
+            weight: 1.0,
             moves: false,
             fluid: false,
         },
@@ -122,10 +122,13 @@ impl Particle {
     }
 
     fn draw(&self, x: usize, y: usize) {
-        let (px, py) = xy_to_pixels(x, y);
-        let color = base_properties(self.particle_type).base_color;
-        draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
+        draw_particle(x, y, base_properties(self.particle_type).base_color);
     }
+}
+
+pub fn draw_particle(x: usize, y: usize, color: Color) {
+    let (px, py) = xy_to_pixels(x, y);
+    draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
 }
 
 #[derive(Debug, Clone)]
@@ -136,31 +139,42 @@ struct ParticleSource {
 
 impl ParticleSource {
     fn draw(&self, x: usize, y: usize) {
-        let (px, py) = xy_to_pixels(x, y);
         let mut color = base_properties(self.particle_type).base_color;
         color.a = 0.5;
         color.r -= 0.1;
         color.g -= 0.1;
         color.b -= 0.1;
-        draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
 
-        if self.particle_type != ParticleType::Empty {
-            let hatch_color = if self.replaces {
-                Color::new(0.0, 0.0, 0.0, 0.2)
-            } else {
-                Color::new(1.0, 1.0, 1.0, 0.5)
-            };
-
-            draw_line(
-                px,
-                py,
-                px + PIXELS_PER_PARTICLE,
-                py + PIXELS_PER_PARTICLE,
-                1.0,
-                hatch_color,
-            );
-        }
+        draw_source(
+            x,
+            y,
+            color,
+            self.replaces,
+            self.particle_type == ParticleType::Empty,
+        );
     }
+}
+
+pub fn draw_source(x: usize, y: usize, color: Color, replaces: bool, sink: bool) {
+    let (px, py) = xy_to_pixels(x, y);
+    draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
+
+    // if !empty {
+    let hatch_color = if replaces || sink {
+        Color::new(0.0, 0.0, 0.0, 0.2)
+    } else {
+        Color::new(1.0, 1.0, 1.0, 0.5)
+    };
+
+    draw_line(
+        px,
+        py,
+        px + PIXELS_PER_PARTICLE,
+        py + PIXELS_PER_PARTICLE,
+        1.0,
+        hatch_color,
+    );
+    // }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -192,19 +206,23 @@ struct Portal {
 
 impl Portal {
     fn draw(&self, x: usize, y: usize) {
-        let (px, py) = xy_to_pixels(x, y);
-        // draw_line()
-        let pix_per = PIXELS_PER_PARTICLE;
-        let thickness = pix_per / 4.0;
-        let (ptx, pty, w, h): (f32, f32, f32, f32) = match self.direction {
-            Direction::UP => (px, py, pix_per, thickness),
-            Direction::RIGHT => (px + pix_per - thickness, py, thickness, pix_per),
-            Direction::DOWN => (px, py + pix_per - thickness, pix_per, thickness),
-            Direction::LEFT => (px, py, thickness, pix_per),
-        };
-
-        draw_rectangle(ptx, pty, w, h, self.color)
+        draw_portal(x, y, self.direction, self.color);
     }
+}
+
+pub fn draw_portal(x: usize, y: usize, direction: Direction, color: Color) {
+    let (px, py) = xy_to_pixels(x, y);
+    // draw_line()
+    let pix_per = PIXELS_PER_PARTICLE;
+    let thickness = pix_per / 4.0;
+    let (ptx, pty, w, h): (f32, f32, f32, f32) = match direction {
+        Direction::UP => (px, py, pix_per, thickness),
+        Direction::RIGHT => (px + pix_per - thickness, py, thickness, pix_per),
+        Direction::DOWN => (px, py + pix_per - thickness, pix_per, thickness),
+        Direction::LEFT => (px, py, thickness, pix_per),
+    };
+
+    draw_rectangle(ptx, pty, w, h, color);
 }
 
 // ─── World ─────────────────────────────────────────────────────────────────────────────────── ✣ ─

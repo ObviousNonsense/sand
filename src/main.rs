@@ -10,7 +10,7 @@ mod core;
 const GRID_WIDTH_: usize = 50;
 const GRID_HEIGHT_: usize = 50;
 // const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
-const PIXELS_PER_PARTICLE: f32 = 8.0;
+const PIXELS_PER_PARTICLE: f32 = 16.0;
 const WORLD_PX0: f32 = 300.0;
 const WORLD_PY0: f32 = 0.0;
 
@@ -34,16 +34,17 @@ fn window_conf() -> Conf {
 struct Settings {
     paused: bool,
     brush_size: f32,
-    highlight_brush: bool,
+    // highlight_brush: bool,
     display_fps: bool,
     placeable_selector: PlaceableSelector,
     sources_replace: bool,
     placement_type: ParticleType,
     delete: bool,
     replace: bool,
-    portal_direction: Direction,
     debug_mode: bool,
+    portal_direction: Direction,
     last_portal_placed: Option<(usize, usize)>,
+    portal_color: Color,
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────── ✣ ─
@@ -70,16 +71,17 @@ async fn main() {
     let mut settings = Settings {
         paused: false,
         brush_size: 1.0,
-        highlight_brush: true,
+        // highlight_brush: true,
         display_fps: false,
         placeable_selector: PlaceableSelector::Particle,
         sources_replace: false,
         placement_type: ParticleType::Sand,
         delete: false,
         replace: false,
-        portal_direction: Direction::DOWN,
         debug_mode: false,
+        portal_direction: Direction::DOWN,
         last_portal_placed: None,
+        portal_color: RED,
     };
 
     loop {
@@ -157,10 +159,15 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
         settings.placement_type = ParticleType::Empty;
         println!("Placement Type: Empty")
     }
-    // Add particles on left click
-    if is_mouse_button_down(MouseButton::Left) {
+
+    let (px, py) = mouse_position();
+
+    if px > WORLD_PX0 && px < screen_width() && py > WORLD_PY0 && py < screen_height() {
         let (mousex_min, mousex_max, mousey_min, mousey_max) =
-            calculate_brush(settings.brush_size, world.width(), world.height());
+            calculate_brush(px, py, settings.brush_size, world.width(), world.height());
+
+        let mousex_avg = ((mousex_min as f32 + mousex_max as f32) / 2.0).floor() as usize;
+        let mousey_avg = ((mousey_min as f32 + mousey_max as f32) / 2.0).floor() as usize;
 
         // println!("Brush span = {}", brush_span);
         for x in mousex_min..mousex_max {
@@ -172,79 +179,23 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 if y >= world.height() {
                     continue;
                 }
-                if settings.delete {
-                    world.delete_source((x, y));
-                    world.add_new_particle(ParticleType::Empty, (x, y), settings.replace);
-                } else {
-                    match settings.placeable_selector {
-                        PlaceableSelector::Particle => {
-                            world.add_new_particle(
-                                settings.placement_type,
-                                (x, y),
-                                settings.replace,
-                            );
-                        }
-                        PlaceableSelector::Source => {
-                            world.add_new_source(
-                                settings.placement_type,
-                                (x, y),
-                                settings.sources_replace,
-                                settings.replace,
-                            );
-                        }
-                        PlaceableSelector::Sink => {
-                            world.add_new_source(
-                                ParticleType::Empty,
-                                (x, y),
-                                true,
-                                settings.replace,
-                            );
-                        }
-                        PlaceableSelector::Portal => {
-                            let added = world.add_new_portal(
-                                (x, y),
-                                settings.last_portal_placed,
-                                settings.portal_direction,
-                                RED,
-                            );
-                            if added {
-                                println!(
-                                    "Creating Portal at {:?} with partner at {:?}",
-                                    (x, y),
-                                    settings.last_portal_placed,
-                                );
-                                let last_portal_placed = match settings.last_portal_placed {
-                                    Some(_) => None,
-                                    None => Some((x, y)),
-                                };
-                                settings.last_portal_placed = last_portal_placed;
-                            }
-                        }
+
+                // Highlight brush
+                highlight_brush(settings, x, y, mousex_avg, mousey_avg);
+
+                // Add particles on left click
+                if is_mouse_button_down(MouseButton::Left) {
+                    if settings.delete {
+                        world.delete_source((x, y));
+                        world.add_new_particle(ParticleType::Empty, (x, y), settings.replace);
+                    } else {
+                        create_placeable(settings, world, (x, y));
                     }
                 }
             }
         }
     }
-    // Highlight a box around the brush is highlight_brush is true
-    if settings.highlight_brush {
-        let (mousex_min, mousex_max, mousey_min, mousey_max) =
-            calculate_brush(settings.brush_size, world.width(), world.height());
-        let (px_min, py_min) = xy_to_pixels(mousex_min, mousey_min);
-        // let xpt = mousex_min as f32 * PIXELS_PER_PARTICLE;
-        // let ypt = mousey_min as f32 * PIXELS_PER_PARTICLE;
-        let sizex = (mousex_max - mousex_min) as f32 * PIXELS_PER_PARTICLE;
-        let sizey = (mousey_max - mousey_min) as f32 * PIXELS_PER_PARTICLE;
 
-        let mut color = base_properties(settings.placement_type).base_color;
-        color.a = 0.4;
-
-        // draw_rectangle_lines(px_min, py_min, sizex, sizey, 3.0, RED);
-        draw_rectangle(px_min, py_min, sizex, sizey, color);
-    }
-    // Print particle info on right click
-    if is_mouse_button_pressed(MouseButton::Right) {
-        println!("{}", debug_particle_string(world));
-    }
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
         world.draw_and_reset_all_particles();
@@ -264,14 +215,6 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
         settings.last_portal_placed = None;
         *world = World::new(world.width(), world.height());
     }
-    // Toggle highlighting with "H"
-    if is_key_pressed(KeyCode::H) {
-        settings.highlight_brush = !settings.highlight_brush;
-    }
-    // Display fps in console on "F"
-    if is_key_pressed(KeyCode::F) {
-        settings.display_fps = !settings.display_fps;
-    }
 
     // Change brush size with mouse wheel
     let (_, mouse_wheel_y) = mouse_wheel();
@@ -284,13 +227,95 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
     }
 }
 
+fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex_max: usize, mousey_max: usize) {
+    match settings.placeable_selector {
+        PlaceableSelector::Particle => {
+            let mut color = base_properties(settings.placement_type).base_color;
+            color.a = 0.4;
+            draw_particle(x, y, color);
+        }
+        PlaceableSelector::Source => {
+            let mut color = base_properties(settings.placement_type).base_color;
+            color.a = 0.4;
+            color.r -= 0.1;
+            color.g -= 0.1;
+            color.b -= 0.1;
+            draw_source(x, y, color, settings.sources_replace, false);
+        }
+        PlaceableSelector::Sink => {
+            let mut color = base_properties(settings.placement_type).base_color;
+            color.a = 0.4;
+            color.r -= 0.1;
+            color.g -= 0.1;
+            color.b -= 0.1;
+            draw_source(x, y, color, settings.sources_replace, true);
+        }
+        PlaceableSelector::Portal => {
+            match settings.portal_direction {
+                Direction::UP | Direction::DOWN => {
+                    if y != mousey_max {
+                        return;
+                    }
+                }
+                Direction::RIGHT | Direction::LEFT => {
+                    if x != mousex_max {
+                        return;
+                    }
+                }
+            }
+            let mut color = settings.portal_color;
+            color.a = 0.4;
+            draw_portal(x, y, settings.portal_direction, color);
+        }
+    }
+}
+
+fn create_placeable(settings: &mut Settings, world: &mut World, xy: (usize, usize)) {
+    match settings.placeable_selector {
+        PlaceableSelector::Particle => {
+            world.add_new_particle(settings.placement_type, xy, settings.replace);
+        }
+        PlaceableSelector::Source => {
+            world.add_new_source(
+                settings.placement_type,
+                xy,
+                settings.sources_replace,
+                settings.replace,
+            );
+        }
+        PlaceableSelector::Sink => {
+            world.add_new_source(ParticleType::Empty, xy, true, settings.replace);
+        }
+        PlaceableSelector::Portal => {
+            let added = world.add_new_portal(
+                xy,
+                settings.last_portal_placed,
+                settings.portal_direction,
+                RED,
+            );
+            if added {
+                println!(
+                    "Creating Portal at {:?} with partner at {:?}",
+                    xy, settings.last_portal_placed,
+                );
+                let last_portal_placed = match settings.last_portal_placed {
+                    Some(_) => None,
+                    None => Some(xy),
+                };
+                settings.last_portal_placed = last_portal_placed;
+            }
+        }
+    }
+}
+
 /// Function to calculate the coordinates of the placement brush
 fn calculate_brush(
+    px: f32,
+    py: f32,
     brush_size: f32,
     grid_width: usize,
     grid_height: usize,
 ) -> (usize, usize, usize, usize) {
-    let (px, py) = mouse_position();
     let (mousex, mousey) = pixels_to_xy::<f32>(px, py);
     let brush_span = brush_size / 2.0;
     let mousex_min = (mousex - brush_span).clamp(0., grid_width as f32) as usize;
