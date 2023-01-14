@@ -179,19 +179,19 @@ pub fn draw_source(x: usize, y: usize, color: Color, replaces: bool, sink: bool)
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
-    UP,
-    RIGHT,
-    DOWN,
-    LEFT,
+    Up,
+    Right,
+    Down,
+    Left,
 }
 
 impl Direction {
     fn dxdy(&self) -> (isize, isize) {
         match self {
-            Direction::UP => (0, -1),
-            Direction::RIGHT => (1, 0),
-            Direction::DOWN => (0, 1),
-            Direction::LEFT => (-1, 0),
+            Direction::Up => (0, -1),
+            Direction::Right => (1, 0),
+            Direction::Down => (0, 1),
+            Direction::Left => (-1, 0),
         }
     }
 }
@@ -216,10 +216,10 @@ pub fn draw_portal(x: usize, y: usize, direction: Direction, color: Color) {
     let pix_per = PIXELS_PER_PARTICLE;
     let thickness = pix_per / 4.0;
     let (ptx, pty, w, h): (f32, f32, f32, f32) = match direction {
-        Direction::UP => (px, py, pix_per, thickness),
-        Direction::RIGHT => (px + pix_per - thickness, py, thickness, pix_per),
-        Direction::DOWN => (px, py + pix_per - thickness, pix_per, thickness),
-        Direction::LEFT => (px, py, thickness, pix_per),
+        Direction::Up => (px, py, pix_per, thickness),
+        Direction::Right => (px + pix_per - thickness, py, thickness, pix_per),
+        Direction::Down => (px, py + pix_per - thickness, pix_per, thickness),
+        Direction::Left => (px, py, thickness, pix_per),
     };
 
     draw_rectangle(ptx, pty, w, h, color);
@@ -352,11 +352,9 @@ impl World {
         source_replaces: bool,
         replace: bool,
     ) {
-        if let Some(_) = self.source_grid[xy] {
-            if !replace {
-                return;
-            }
-        }
+        if self.source_grid[xy].is_some() && !replace {
+            return;
+        };
 
         self.source_grid[xy] = Some(ParticleSource {
             particle_type: source_type,
@@ -371,7 +369,7 @@ impl World {
         direction: Direction,
         color: Color,
     ) -> bool {
-        if let Some(_) = self.portal_grid[xy] {
+        if self.portal_exists_at(xy) {
             return false;
         }
 
@@ -392,7 +390,7 @@ impl World {
     }
 
     pub fn portal_exists_at(&self, xy: (usize, usize)) -> bool {
-        if let Some(_) = self.portal_grid[xy] {
+        if self.portal_grid[xy].is_some() {
             return true;
         }
         false

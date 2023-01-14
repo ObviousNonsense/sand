@@ -83,7 +83,7 @@ async fn main() {
         delete: false,
         replace: false,
         debug_mode: false,
-        portal_direction: Direction::DOWN,
+        portal_direction: Direction::Down,
         last_portal_placed: vec![],
         waiting_for_partner_portal: false,
         portal_color: color_cycle.next().unwrap(),
@@ -179,7 +179,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
         settings.portal_placement_valid = true;
         if settings.placeable_selector == PlaceableSelector::Portal {
             match settings.portal_direction {
-                Direction::UP | Direction::DOWN => {
+                Direction::Up | Direction::Down => {
                     for x in mousex_min..mousex_max {
                         if x < 1 || x >= world.width() - 1 || world.portal_exists_at((x, mousey)) {
                             settings.portal_placement_valid = false;
@@ -187,7 +187,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                         }
                     }
                 }
-                Direction::RIGHT | Direction::LEFT => {
+                Direction::Right | Direction::Left => {
                     for y in mousey_min..mousey_max {
                         if y < 1 || y >= world.width() - 1 || world.portal_exists_at((mousex, y)) {
                             settings.portal_placement_valid = false;
@@ -285,12 +285,12 @@ fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mouse
                 return;
             }
             match settings.portal_direction {
-                Direction::UP | Direction::DOWN => {
+                Direction::Up | Direction::Down => {
                     if y != mousey {
                         return;
                     }
                 }
-                Direction::RIGHT | Direction::LEFT => {
+                Direction::Right | Direction::Left => {
                     if x != mousex {
                         return;
                     }
@@ -331,12 +331,12 @@ fn create_placeable(
             }
 
             match settings.portal_direction {
-                Direction::UP | Direction::DOWN => {
+                Direction::Up | Direction::Down => {
                     if xy.1 != mousey {
                         return;
                     }
                 }
-                Direction::RIGHT | Direction::LEFT => {
+                Direction::Right | Direction::Left => {
                     if xy.0 != mousex {
                         return;
                     }
@@ -350,16 +350,15 @@ fn create_placeable(
                 );
             }
 
-            let partner_xy;
-            if settings.waiting_for_partner_portal {
+            let partner_xy = if settings.waiting_for_partner_portal {
                 let mut color = rgb_to_hsl(settings.portal_color);
                 color.1 += 0.01;
                 color.2 += 0.01;
                 settings.portal_color = hsl_to_rgb(color.0, color.1, color.2);
-                partner_xy = settings.last_portal_placed.pop()
+                settings.last_portal_placed.pop()
             } else {
-                partner_xy = None;
-            }
+                None
+            };
 
             // TODO: Since I'm checking in advance whether there's already a
             // portal there now, checking again here is redundant
@@ -536,20 +535,20 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     // );
                     if settings.placeable_selector == PlaceableSelector::Portal {
                         ui.label("Portal Direction: ");
-                        ui.selectable_value(&mut settings.portal_direction, Direction::UP, "Up");
+                        ui.selectable_value(&mut settings.portal_direction, Direction::Up, "Up");
                         ui.selectable_value(
                             &mut settings.portal_direction,
-                            Direction::RIGHT,
+                            Direction::Right,
                             "Right",
                         );
                         ui.selectable_value(
                             &mut settings.portal_direction,
-                            Direction::DOWN,
+                            Direction::Down,
                             "Down",
                         );
                         ui.selectable_value(
                             &mut settings.portal_direction,
-                            Direction::LEFT,
+                            Direction::Left,
                             "Left",
                         );
                     } else if settings.delete
