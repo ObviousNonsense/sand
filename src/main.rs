@@ -1,15 +1,15 @@
-// use color_eyre::eyre::Result;
 use crate::core::*;
 use egui_macroquad::{egui::ComboBox, *};
-// use enum_map::{enum_map, Enum, EnumMap};
-use macroquad::prelude::*;
+use macroquad::{
+    color::{hsl_to_rgb, rgb_to_hsl},
+    prelude::*,
+};
+use std::iter::Cycle;
 
 mod core;
-// mod world;
 
 const GRID_WIDTH_: usize = 50;
 const GRID_HEIGHT_: usize = 50;
-// const WORLD_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 const PIXELS_PER_PARTICLE: f32 = 16.0;
 const WORLD_PX0: f32 = 300.0;
 const WORLD_PY0: f32 = 0.0;
@@ -17,7 +17,6 @@ const WORLD_PY0: f32 = 0.0;
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
 const LIMIT_UPDATE_RATE: bool = false;
-// const BRUSH_SIZE: f32 = 1.0;
 
 fn window_conf() -> Conf {
     Conf {
@@ -46,6 +45,7 @@ struct Settings {
     waiting_for_partner_portal: bool,
     portal_color: Color,
     portal_placement_valid: bool,
+    portal_color_cycle: Cycle<std::vec::IntoIter<Color>>,
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────── ✣ ─
@@ -69,6 +69,10 @@ async fn main() {
     let mut frame_time_sum = 0.0;
     let mut fps = 0.0;
 
+    let mut color_cycle = vec![RED, LIME, VIOLET, PINK, ORANGE, GOLD, BEIGE, WHITE]
+        .into_iter()
+        .cycle();
+
     let mut settings = Settings {
         paused: false,
         brush_size: 1.0,
@@ -82,8 +86,9 @@ async fn main() {
         portal_direction: Direction::DOWN,
         last_portal_placed: vec![],
         waiting_for_partner_portal: false,
-        portal_color: RED,
+        portal_color: color_cycle.next().unwrap(),
         portal_placement_valid: true,
+        portal_color_cycle: color_cycle,
     };
 
     loop {
@@ -168,8 +173,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
         let (mousex_min, mousex_max, mousey_min, mousey_max) =
             calculate_brush(px, py, settings.brush_size, world.width(), world.height());
 
-        let mousex_avg = ((mousex_min as f32 + mousex_max as f32) / 2.0).floor() as usize;
-        let mousey_avg = ((mousey_min as f32 + mousey_max as f32) / 2.0).floor() as usize;
+        let (mousex, mousey) = mouse_location(world.width(), world.height());
 
         // Check whether the location/size of the portal we're trying to place is valid
         settings.portal_placement_valid = true;
@@ -177,7 +181,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
             match settings.portal_direction {
                 Direction::UP | Direction::DOWN => {
                     for x in mousex_min..mousex_max {
-                        if world.portal_exists_at((x, mousey_avg)) {
+                        if x < 1 || x >= world.width() - 1 || world.portal_exists_at((x, mousey)) {
                             settings.portal_placement_valid = false;
                             break;
                         }
@@ -185,7 +189,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 }
                 Direction::RIGHT | Direction::LEFT => {
                     for y in mousey_min..mousey_max {
-                        if world.portal_exists_at((mousex_avg, y)) {
+                        if y < 1 || y >= world.width() - 1 || world.portal_exists_at((mousex, y)) {
                             settings.portal_placement_valid = false;
                             break;
                         }
@@ -206,7 +210,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 }
 
                 // Highlight brush
-                highlight_brush(settings, x, y, mousex_avg, mousey_avg);
+                highlight_brush(settings, x, y, mousex, mousey);
 
                 // Add particles on left click
                 if is_mouse_button_down(MouseButton::Left) {
@@ -214,7 +218,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                         world.delete_source((x, y));
                         world.add_new_particle(ParticleType::Empty, (x, y), settings.replace);
                     } else {
-                        create_placeable(settings, world, (x, y), mousex_avg, mousey_avg);
+                        create_placeable(settings, world, (x, y), mousex, mousey);
                     }
                 }
             }
@@ -339,13 +343,19 @@ fn create_placeable(
                 }
             }
 
-            println!(
-                "Before: waiting for partner = {}",
-                settings.waiting_for_partner_portal
-            );
+            if settings.debug_mode {
+                println!(
+                    "Before: waiting for partner = {}",
+                    settings.waiting_for_partner_portal
+                );
+            }
 
             let partner_xy;
             if settings.waiting_for_partner_portal {
+                let mut color = rgb_to_hsl(settings.portal_color);
+                color.1 += 0.01;
+                color.2 += 0.01;
+                settings.portal_color = hsl_to_rgb(color.0, color.1, color.2);
                 partner_xy = settings.last_portal_placed.pop()
             } else {
                 partner_xy = None;
@@ -353,12 +363,22 @@ fn create_placeable(
 
             // TODO: Since I'm checking in advance whether there's already a
             // portal there now, checking again here is redundant
-            let added = world.add_new_portal(xy, partner_xy, settings.portal_direction, RED);
+            let added = world.add_new_portal(
+                xy,
+                partner_xy,
+                settings.portal_direction,
+                settings.portal_color,
+            );
 
             if added {
                 if !settings.waiting_for_partner_portal {
                     settings.last_portal_placed.push(xy);
+                    let mut color = rgb_to_hsl(settings.portal_color);
+                    color.1 -= 0.01;
+                    color.2 -= 0.01;
+                    settings.portal_color = hsl_to_rgb(color.0, color.1, color.2);
                 } else if settings.last_portal_placed.is_empty() {
+                    settings.portal_color = settings.portal_color_cycle.next().unwrap();
                     settings.waiting_for_partner_portal = false;
                 }
 
@@ -371,16 +391,18 @@ fn create_placeable(
                 // };
                 // settings.last_portal_placed = last_portal_placed;
 
-                println!(
-                    "Creating Portal at {:?} with partner at {:?}",
-                    xy, partner_xy,
-                );
-                println!("Last Portal placed = {:?}", settings.last_portal_placed);
-                println!(
-                    "After: waiting for partner = {}",
-                    settings.waiting_for_partner_portal
-                );
-                println!("------------------------------")
+                if settings.debug_mode {
+                    println!(
+                        "Creating Portal at {:?} with partner at {:?}",
+                        xy, partner_xy,
+                    );
+                    println!("Last Portal placed = {:?}", settings.last_portal_placed);
+                    println!(
+                        "After: waiting for partner = {}",
+                        settings.waiting_for_partner_portal
+                    );
+                    println!("------------------------------")
+                }
             }
         }
     }
@@ -434,7 +456,7 @@ impl PlaceableSelector {
             PlaceableSelector::Particle => "Particle",
             PlaceableSelector::Source => "Source",
             PlaceableSelector::Sink => "Sink",
-            PlaceableSelector::Portal => "Portal",
+            PlaceableSelector::Portal => "Portal (buggy)",
         }
     }
 }
@@ -472,22 +494,22 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                             ui.selectable_value(
                                 &mut settings.placeable_selector,
                                 PlaceableSelector::Particle,
-                                "Particle",
+                                PlaceableSelector::Particle.as_str(),
                             );
                             ui.selectable_value(
                                 &mut settings.placeable_selector,
                                 PlaceableSelector::Source,
-                                "Source",
+                                PlaceableSelector::Source.as_str(),
                             );
                             ui.selectable_value(
                                 &mut settings.placeable_selector,
                                 PlaceableSelector::Sink,
-                                "Sink",
+                                PlaceableSelector::Sink.as_str(),
                             );
                             ui.selectable_value(
                                 &mut settings.placeable_selector,
                                 PlaceableSelector::Portal,
-                                "Portal",
+                                PlaceableSelector::Portal.as_str(),
                             );
                         })
                 });
