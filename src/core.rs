@@ -1,6 +1,10 @@
+use std::f32::consts::{FRAC_PI_4, PI};
+
 use super::*;
 use ::rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
 use array2d::Array2D;
+
+const GRAVITY: Vec2 = vec2(0.0, 0.5);
 
 // #[derive(Debug, PartialEq)]
 // pub enum Placeable {
@@ -44,8 +48,8 @@ pub fn base_properties(particle_type: ParticleType) -> ParticleTypeProperties {
         ParticleType::Empty => ParticleTypeProperties {
             base_color: Color::new(0.2, 0.2, 0.2, 1.0),
             weight: 1.0,
-            moves: false,
-            fluid: false,
+            moves: true,
+            fluid: true,
         },
         ParticleType::Sand => ParticleTypeProperties {
             base_color: YELLOW,
@@ -69,6 +73,7 @@ pub struct Particle {
     // pub color: Color,
     updated: bool,
     moved: Option<bool>,
+    velocity: Option<Vec2>,
     moving_right: Option<bool>,
 }
 
@@ -76,11 +81,16 @@ impl Particle {
     fn new(particle_type: ParticleType, rng: &mut ThreadRng) -> Self {
         // TODO: modulate individual particle color relative to base_color
 
-        let moved = if base_properties(particle_type).moves {
-            Some(false)
+        let moved;
+        let velocity: Option<Vec2>;
+
+        if base_properties(particle_type).moves {
+            moved = Some(false);
+            velocity = Some(Vec2::new(0.0, 0.0));
         } else {
-            None
-        };
+            moved = None;
+            velocity = None;
+        }
 
         let moving_right = if base_properties(particle_type).fluid {
             Some(rng.gen())
@@ -93,6 +103,7 @@ impl Particle {
             // color,
             updated: false,
             moved,
+            velocity,
             moving_right,
         }
     }
@@ -123,6 +134,20 @@ impl Particle {
 
     fn draw(&self, x: usize, y: usize) {
         draw_particle(x, y, base_properties(self.particle_type).base_color);
+        if base_properties(self.particle_type).moves {
+            let (px, py) = xy_to_pixels(x, y);
+            let px_center = px + PIXELS_PER_PARTICLE / 2.0;
+            let py_center = py + PIXELS_PER_PARTICLE / 2.0;
+            let pv = self.velocity.unwrap() * PIXELS_PER_PARTICLE / 2.0;
+            draw_line(
+                px_center,
+                py_center,
+                px_center + pv.x,
+                py_center + pv.y,
+                2.0,
+                RED,
+            )
+        }
     }
 }
 
@@ -312,7 +337,14 @@ impl World {
             self.particle_grid[xy].updated = true;
 
             match particle_clone.particle_type {
+                // ParticleType::Empty => {
+                //     self.apply_gravity(xy);
+                //     // self.apply_pressure(xy);
+                // }
                 ParticleType::Sand => {
+                    self.apply_gravity(xy);
+                    // self.apply_pressure(xy);
+                    // self.movement(xy, particle_clone);
                     self.sand_movement(xy, particle_clone);
                 }
                 ParticleType::Water => {
@@ -508,13 +540,174 @@ impl World {
         )
     }
 
+    fn apply_gravity(&mut self, xy: (usize, usize)) {
+        if !base_properties(self.particle_grid[xy].particle_type).moves {
+            unreachable!(
+                "Tried applying gravity to a particle that doesn't move: {:?}",
+                self.particle_grid[xy]
+            )
+        }
+        // Weight needs to factor in here?
+        // self.particle_grid
+        //     .get_mut(xy.0, xy.1)
+        //     .map(|x| x.velocity.as_mut().unwrap().y += GRAVITY);
+        self.apply_force(xy, GRAVITY);
+        // .momentum.unwrap()[(0, 1)] += 1.0;
+    }
+
+    // I don't think this function is what I want actually. Probably I should
+    // have the moving particle apply pressure to other things?
+    fn apply_pressure(&mut self, xy: (usize, usize)) {
+        if !base_properties(self.particle_grid[xy].particle_type).moves {
+            unreachable!(
+                "Tried applying pressure to a particle that doesn't move: {:?}",
+                self.particle_grid[xy]
+            )
+        }
+
+        let mut pressure = vec2(0.0, 0.0);
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                let other_particle = self.particle_grid[self.relative_xy(xy, (dx, dy))].clone();
+                if base_properties(other_particle.particle_type).moves {
+                    pressure += other_particle.velocity.unwrap();
+                }
+            }
+        }
+
+        self.apply_force(xy, pressure / 8.0);
+    }
+
+    fn apply_force(&mut self, xy: (usize, usize), val: Vec2) {
+        if !base_properties(self.particle_grid[xy].particle_type).moves {
+            unreachable!(
+                "Tried applying force to a particle that doesn't move: {:?}",
+                self.particle_grid[xy]
+            )
+        }
+
+        // Mass should probably be applied here
+        self.particle_grid.get_mut(xy.0, xy.1).map(|x| {
+            let v = (x.velocity.unwrap() + val).clamp_length_max(1.0);
+            *x.velocity.as_mut().unwrap() = v;
+        });
+    }
+
+    fn rotate_velocity(&mut self, xy: (usize, usize), angle: f32) {
+        if !base_properties(self.particle_grid[xy].particle_type).moves {
+            unreachable!(
+                "Tried rotating velocity on a particle that doesn't move: {:?}",
+                self.particle_grid[xy]
+            )
+        }
+        self.particle_grid.get_mut(xy.0, xy.1).map(|x| {
+            let v = Vec2::from_angle(angle)
+                .rotate(x.velocity.unwrap())
+                .clamp_length_max(1.0);
+
+            // println!("-------------------");
+            // dbg!(angle);
+            // dbg!(x.velocity.unwrap().length());
+            // dbg!(x.velocity.unwrap().angle_between(vec2(1.0, 0.0)));
+            // dbg!(v);
+            // dbg!(v).angle_between(vec2(0.0, 0.0));
+            *x.velocity.as_mut().unwrap() = v;
+        });
+    }
+
+    fn set_velocity(&mut self, xy: (usize, usize), val: Vec2) {
+        self.particle_grid.get_mut(xy.0, xy.1).map(|x| {
+            *x.velocity.as_mut().unwrap() = val;
+        });
+    }
+
+    fn collision(&mut self, xy1: (usize, usize), xy2: (usize, usize)) {}
+
+    fn movement_direction(&mut self, xy: (usize, usize)) -> ((isize, isize), f32) {
+        let v = self.particle_grid[xy].velocity.unwrap();
+        let angle = v.y.atan2(v.x);
+        // let v_polar = cartesian_to_polar(v_cart);
+        // dbg!(v_polar);
+        // let angle = v_polar.y;
+        let angle_round = (angle / FRAC_PI_4).round() * FRAC_PI_4;
+        let rem = angle - angle_round;
+        // dbg!(angle_round);
+        let v_cart_round = polar_to_cartesian(1.0, angle_round).round();
+        // dbg!(v_cart_round);
+        (v_cart_round.as_isize().clamp_one(), rem)
+    }
+
+    // fn movement(&mut self, xy: (usize, usize), particle_clone: Particle) {
+    //     // Look at velocity to decide which direction to try moving
+    //     // -
+    //     let original_velocity = self.particle_grid[xy].velocity.unwrap();
+    //     let r = self.rng.gen();
+    //     // let r = false;
+    //     let angles = if r {
+    //         vec![0.0, -FRAC_PI_4, FRAC_PI_4]
+    //     } else {
+    //         vec![0.0, FRAC_PI_4, -FRAC_PI_4]
+    //     };
+
+    //     let mut moved = false;
+    //     let mut dxdy = (0, 0);
+
+    //     for theta in angles.into_iter() {
+    //         // println!("-------------------------------------");
+    //         // dbg!(self.particle_grid[xy].velocity.unwrap());
+    //         self.rotate_velocity(xy, theta);
+    //         // dbg!(self.particle_grid[xy].velocity.unwrap());
+    //         dxdy = self.movement_direction(xy);
+    //         // dbg!(dxdy);
+    //         let other_xy = self.relative_xy(xy, dxdy);
+    //         if self.particle_grid[other_xy].particle_type == ParticleType::Empty {
+    //             self.swap_particles(xy, other_xy);
+    //             moved = true;
+    //             break;
+    //         }
+
+    //         // if it didn't move, set the velocity back to the original
+    //         self.set_velocity(xy, original_velocity);
+    //     }
+
+    //     if !moved {
+    //         self.set_velocity(xy, vec2(0.0, 0.0));
+    //     } else if dxdy.0 != 0 {
+    //         let xy_new = self.relative_xy(xy, dxdy);
+    //         self.apply_force(xy_new, -0.5 * self.particle_grid[xy_new].velocity.unwrap());
+    //     }
+    // }
+
     fn sand_movement(&mut self, xy: (usize, usize), particle_clone: Particle) {
         if particle_clone.moved().unwrap() {
             return;
         }
-        let r = self.rng.gen();
-        let right: isize = if r { -1 } else { 1 };
-        let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+        let v = particle_clone.velocity.unwrap();
+        let v_snap = v.snap_to_pi_8();
+        let direction = v_snap.as_isize().clamp_one();
+        let mut check_directions = vec![direction];
+
+        match direction {
+            (_, 1) => {}
+            (-1, 0) => {
+                if v.y < v_snap.y {
+                    check_directions.push((-1, -1));
+                }
+            }
+            (-1, -1) => {
+                if v.y < v_snap.y {
+                    check_directions.push((0, -1));
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        // let r = self.rng.gen();
+        // let right: isize = if r { -1 } else { 1 };
+        // let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
 
         for dxdy in check_directions.iter() {
             let other_xy = self.relative_xy(xy, *dxdy);
@@ -576,4 +769,33 @@ impl World {
         (i % self.width, i / self.width)
     }
 }
+
+trait HelperMethods {
+    fn as_isize(&self) -> (isize, isize);
+    fn snap_to_pi_8(&self) -> Self;
+}
+
+impl HelperMethods for Vec2 {
+    fn as_isize(&self) -> (isize, isize) {
+        (self.x as isize, self.y as isize)
+    }
+
+    fn snap_to_pi_8(&self) -> Vec2 {
+        let angle = self.y.atan2(self.x);
+        let angle_round = (angle / FRAC_PI_4).round() * FRAC_PI_4;
+        let v_snapped = polar_to_cartesian(self.length(), angle_round);
+        v_snapped
+    }
+}
+
+trait ClampOne {
+    fn clamp_one(&self) -> (isize, isize);
+}
+
+impl ClampOne for (isize, isize) {
+    fn clamp_one(&self) -> (isize, isize) {
+        (self.0.clamp(-1, 1), self.1.clamp(-1, 1))
+    }
+}
+
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─

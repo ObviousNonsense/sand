@@ -8,9 +8,9 @@ use std::iter::Cycle;
 
 mod core;
 
-const GRID_WIDTH_: usize = 50;
-const GRID_HEIGHT_: usize = 50;
-const PIXELS_PER_PARTICLE: f32 = 16.0;
+const GRID_WIDTH_: usize = 100;
+const GRID_HEIGHT_: usize = 100;
+const PIXELS_PER_PARTICLE: f32 = 8.0;
 const WORLD_PX0: f32 = 300.0;
 const WORLD_PY0: f32 = 0.0;
 
