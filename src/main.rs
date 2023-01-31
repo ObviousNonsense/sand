@@ -56,10 +56,10 @@ async fn main() {
     // Something wrong with this on Mac for some reason. But also without it the
     // display is wrong on windows when the 4k monitor with 150% scaling is the
     // primary monitor
-    // request_new_screen_size(
-    //     WORLD_PX0 + GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE,
-    //     WORLD_PY0 + GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE,
-    // );
+    request_new_screen_size(
+        WORLD_PX0 + GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE,
+        WORLD_PY0 + GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE,
+    );
 
     // Initialize Grid
     let mut world = World::new(GRID_WIDTH_, GRID_HEIGHT_);
@@ -260,12 +260,12 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
 fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mousey: usize) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
-            let mut color = base_properties(settings.placement_type).base_color;
+            let mut color = settings.placement_type.properties().base_color;
             color.a = 0.4;
             draw_particle(x, y, color);
         }
         PlaceableSelector::Source => {
-            let mut color = base_properties(settings.placement_type).base_color;
+            let mut color = settings.placement_type.properties().base_color;
             color.a = 0.4;
             color.r -= 0.1;
             color.g -= 0.1;
@@ -273,7 +273,7 @@ fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mouse
             draw_source(x, y, color, settings.sources_replace, false);
         }
         PlaceableSelector::Sink => {
-            let mut color = base_properties(settings.placement_type).base_color;
+            let mut color = settings.placement_type.properties().base_color;
             color.a = 0.4;
             color.r -= 0.1;
             color.g -= 0.1;

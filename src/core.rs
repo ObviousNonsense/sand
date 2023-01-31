@@ -27,38 +27,40 @@ pub struct ParticleTypeProperties {
     fluid: bool,
 }
 
-pub fn base_properties(particle_type: ParticleType) -> ParticleTypeProperties {
-    match particle_type {
-        ParticleType::Border => ParticleTypeProperties {
-            base_color: GRAY,
-            weight: f32::INFINITY,
-            moves: false,
-            fluid: false,
-        },
-        ParticleType::Concrete => ParticleTypeProperties {
-            base_color: GRAY,
-            weight: f32::INFINITY,
-            moves: false,
-            fluid: false,
-        },
-        ParticleType::Empty => ParticleTypeProperties {
-            base_color: Color::new(0.2, 0.2, 0.2, 1.0),
-            weight: 1.0,
-            moves: false,
-            fluid: false,
-        },
-        ParticleType::Sand => ParticleTypeProperties {
-            base_color: YELLOW,
-            weight: 90.0,
-            moves: true,
-            fluid: false,
-        },
-        ParticleType::Water { .. } => ParticleTypeProperties {
-            base_color: BLUE,
-            weight: 60.0,
-            moves: true,
-            fluid: true,
-        },
+impl ParticleType {
+    pub const fn properties(&self) -> ParticleTypeProperties {
+        match self {
+            ParticleType::Border => ParticleTypeProperties {
+                base_color: GRAY,
+                weight: f32::INFINITY,
+                moves: false,
+                fluid: false,
+            },
+            ParticleType::Concrete => ParticleTypeProperties {
+                base_color: GRAY,
+                weight: f32::INFINITY,
+                moves: false,
+                fluid: false,
+            },
+            ParticleType::Empty => ParticleTypeProperties {
+                base_color: Color::new(0.2, 0.2, 0.2, 1.0),
+                weight: 1.0,
+                moves: false,
+                fluid: false,
+            },
+            ParticleType::Sand => ParticleTypeProperties {
+                base_color: YELLOW,
+                weight: 90.0,
+                moves: true,
+                fluid: false,
+            },
+            ParticleType::Water => ParticleTypeProperties {
+                base_color: BLUE,
+                weight: 60.0,
+                moves: true,
+                fluid: true,
+            },
+        }
     }
 }
 
@@ -76,13 +78,13 @@ impl Particle {
     fn new(particle_type: ParticleType, rng: &mut ThreadRng) -> Self {
         // TODO: modulate individual particle color relative to base_color
 
-        let moved = if base_properties(particle_type).moves {
+        let moved = if particle_type.properties().moves {
             Some(false)
         } else {
             None
         };
 
-        let moving_right = if base_properties(particle_type).fluid {
+        let moving_right = if particle_type.properties().fluid {
             Some(rng.gen())
         } else {
             None
@@ -98,7 +100,7 @@ impl Particle {
     }
 
     fn set_moved(&mut self, val: bool) {
-        if base_properties(self.particle_type).moves {
+        if self.particle_type.properties().moves {
             self.moved = Some(val);
         } else {
             unreachable!("Called set_moved on non-movable particle {:?}", self);
@@ -110,7 +112,7 @@ impl Particle {
     }
 
     fn toggle_moving_right(&mut self) {
-        if base_properties(self.particle_type).fluid {
+        if self.particle_type.properties().fluid {
             self.moving_right = Some(!self.moving_right.unwrap());
         } else {
             unreachable!("Called set_moving_right on non-fluid particle {:?}", self);
@@ -122,8 +124,12 @@ impl Particle {
     }
 
     fn draw(&self, x: usize, y: usize) {
-        draw_particle(x, y, base_properties(self.particle_type).base_color);
+        draw_particle(x, y, self.particle_type.properties().base_color);
     }
+
+    // fn test(&self, world: &mut World) {
+    //     todo!();
+    // }
 }
 
 pub fn draw_particle(x: usize, y: usize, color: Color) {
@@ -139,7 +145,7 @@ struct ParticleSource {
 
 impl ParticleSource {
     fn draw(&self, x: usize, y: usize) {
-        let mut color = base_properties(self.particle_type).base_color;
+        let mut color = self.particle_type.properties().base_color;
         color.a = 0.5;
         color.r -= 0.1;
         color.g -= 0.1;
@@ -305,7 +311,7 @@ impl World {
             let idx = *idx;
             let xy = self.index_to_xy(idx);
             let particle_clone = self.particle_grid[xy].clone();
-
+            // particle_clone.test(self);
             if particle_clone.updated {
                 continue;
             }
@@ -481,11 +487,11 @@ impl World {
     }
 
     fn weight_at(&self, xy: (usize, usize)) -> f32 {
-        base_properties(self.particle_grid[xy].particle_type).weight
+        self.particle_grid[xy].particle_type.properties().weight
     }
 
     fn movable_at(&self, xy: (usize, usize)) -> bool {
-        base_properties(self.particle_grid[xy].particle_type).moves
+        self.particle_grid[xy].particle_type.properties().moves
     }
 
     fn relative_xy(&self, xy: (usize, usize), dxdy: (isize, isize)) -> (usize, usize) {
@@ -556,7 +562,7 @@ impl World {
             for y in 0..self.height {
                 let ptype = self.particle_grid[(x, y)].particle_type;
                 self.particle_grid[(x, y)].updated = false;
-                if base_properties(ptype).moves {
+                if ptype.properties().moves {
                     self.particle_grid[(x, y)].set_moved(false);
                 }
 
