@@ -128,27 +128,81 @@ impl Particle {
     }
 
     fn update(&mut self, mut api: WorldApi) {
-        match self.particle_type {
-            ParticleType::Sand => {
-                if self.moved.unwrap() {
-                    return;
-                }
-                let r = api.random::<bool>();
+        if self.particle_type.properties().moves {
+            self.movement(&mut api);
+        }
+        // match self.particle_type {
+        //     ParticleType::Sand => {
+        //         if self.moved.unwrap() {
+        //             return;
+        //         }
+        //         let r = api.random::<bool>();
 
-                let right: isize = if r { -1 } else { 1 };
-                let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+        //         let right: isize = if r { -1 } else { 1 };
+        //         let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
 
-                for dxdy in check_directions.into_iter() {
-                    let other_p = api.neighbour(dxdy);
+        //         for dxdy in check_directions.into_iter() {
+        //             let other_p = api.neighbour(dxdy);
 
-                    if other_p.particle_type == ParticleType::Empty {
-                        self.moved = Some(true);
-                        api.swap_with(dxdy, self.to_owned());
-                        break;
-                    }
-                }
+        //             if other_p.particle_type == ParticleType::Empty {
+        //                 self.moved = Some(true);
+        //                 api.swap_with(dxdy, self.to_owned());
+        //                 break;
+        //             }
+        //         }
+        //     }
+        //     _ => {}
+        // }
+    }
+
+    fn movement(&mut self, api: &mut WorldApi) {
+        if self.moved.unwrap() {
+            return;
+        }
+
+        if self.particle_type.properties().fluid {
+            self.fluid_movement(api);
+        } else {
+            self.sand_movement(api);
+        }
+    }
+
+    fn sand_movement(&mut self, api: &mut WorldApi) {
+        let r = api.random::<bool>();
+        let right: isize = if r { -1 } else { 1 };
+        let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+        for dxdy in check_directions.into_iter() {
+            let other_p = api.neighbour(dxdy);
+            if other_p.particle_type == ParticleType::Empty {
+                self.moved = Some(true);
+                api.swap_with(dxdy, self.to_owned());
+                return;
             }
-            _ => {}
+        }
+    }
+
+    fn fluid_movement(&mut self, api: &mut WorldApi) {
+        let check_directions = if self.moving_right.unwrap() {
+            [(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)]
+        } else {
+            [(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)]
+        };
+
+        for (dxdy, k) in check_directions.into_iter().zip(0..5) {
+            let other_p = api.neighbour(dxdy);
+            if other_p.particle_type == ParticleType::Empty {
+                self.moved = Some(true);
+                if dxdy == (-1, 1) {
+                    self.moving_right = Some(false)
+                }
+                if dxdy == (1, 1) {
+                    self.moving_right = Some(true)
+                } else if k == 4 {
+                    self.moving_right = Some(!self.moving_right.unwrap());
+                }
+                api.swap_with(dxdy, self.to_owned());
+                return;
+            }
         }
     }
 }
@@ -158,6 +212,7 @@ pub fn draw_particle(x: usize, y: usize, color: Color) {
     draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
 }
 
+/* #region  */
 #[derive(Debug, Clone)]
 struct ParticleSource {
     particle_type: ParticleType,
@@ -252,6 +307,8 @@ pub fn draw_portal(x: usize, y: usize, direction: Direction, color: Color) {
     draw_rectangle(ptx, pty, w, h, color);
 }
 
+/* #endregion */
+
 struct WorldApi<'a> {
     world: &'a mut World,
     xy: (usize, usize),
@@ -269,11 +326,12 @@ impl<'a> WorldApi<'a> {
         self.world.relative_particle(self.xy, dxdy)
     }
 
-    fn swap_with(self, dxdy: (isize, isize), particle: Particle) {
+    fn swap_with(&mut self, dxdy: (isize, isize), particle: Particle) {
         let other_xy = self.world.relative_xy(self.xy, dxdy);
         let other_p = self.world.particle_grid[other_xy].clone();
         self.world.particle_grid[self.xy] = other_p;
         self.world.particle_grid[other_xy] = particle;
+        self.xy = other_xy;
     }
 }
 
