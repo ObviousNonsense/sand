@@ -1,5 +1,5 @@
 use super::*;
-use ::rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
+use ::rand::{prelude::Distribution, rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
 use array2d::Array2D;
 
 // #[derive(Debug, PartialEq)]
@@ -127,9 +127,30 @@ impl Particle {
         draw_particle(x, y, self.particle_type.properties().base_color);
     }
 
-    // fn test(&self, world: &mut World) {
-    //     todo!();
-    // }
+    fn update(&mut self, mut api: WorldApi) {
+        match self.particle_type {
+            ParticleType::Sand => {
+                if self.moved.unwrap() {
+                    return;
+                }
+                let r = api.random::<bool>();
+
+                let right: isize = if r { -1 } else { 1 };
+                let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+
+                for dxdy in check_directions.into_iter() {
+                    let other_p = api.neighbour(dxdy);
+
+                    if other_p.particle_type == ParticleType::Empty {
+                        self.moved = Some(true);
+                        api.swap_with(dxdy, self.to_owned());
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 pub fn draw_particle(x: usize, y: usize, color: Color) {
@@ -231,6 +252,31 @@ pub fn draw_portal(x: usize, y: usize, direction: Direction, color: Color) {
     draw_rectangle(ptx, pty, w, h, color);
 }
 
+struct WorldApi<'a> {
+    world: &'a mut World,
+    xy: (usize, usize),
+}
+
+impl<'a> WorldApi<'a> {
+    fn random<T>(&mut self) -> T
+    where
+        ::rand::distributions::Standard: Distribution<T>,
+    {
+        self.world.rng.gen::<T>()
+    }
+
+    fn neighbour(&self, dxdy: (isize, isize)) -> &Particle {
+        self.world.relative_particle(self.xy, dxdy)
+    }
+
+    fn swap_with(self, dxdy: (isize, isize), particle: Particle) {
+        let other_xy = self.world.relative_xy(self.xy, dxdy);
+        let other_p = self.world.particle_grid[other_xy].clone();
+        self.world.particle_grid[self.xy] = other_p;
+        self.world.particle_grid[other_xy] = particle;
+    }
+}
+
 // ─── World ─────────────────────────────────────────────────────────────────────────────────── ✣ ─
 pub struct World {
     particle_grid: Array2D<Particle>,
@@ -308,24 +354,28 @@ impl World {
             .collect();
         idx_range.shuffle(&mut self.rng);
         for idx in idx_range.iter() {
-            let idx = *idx;
-            let xy = self.index_to_xy(idx);
-            let particle_clone = self.particle_grid[xy].clone();
-            // particle_clone.test(self);
+            // let idx = *idx;
+            let xy = self.index_to_xy(*idx);
+
+            let mut particle_clone = self.particle_grid[xy].clone();
+
             if particle_clone.updated {
                 continue;
             }
-            self.particle_grid[xy].updated = true;
 
-            match particle_clone.particle_type {
-                ParticleType::Sand => {
-                    self.sand_movement(xy, particle_clone);
-                }
-                ParticleType::Water => {
-                    self.fluid_movement(xy, particle_clone);
-                }
-                _ => {}
-            }
+            particle_clone.update(WorldApi { world: self, xy });
+
+            // self.particle_grid[xy].updated = true;
+
+            // match particle_clone.particle_type {
+            //     ParticleType::Sand => {
+            //         self.sand_movement(xy, particle_clone);
+            //     }
+            //     ParticleType::Water => {
+            //         self.fluid_movement(xy, particle_clone);
+            //     }
+            //     _ => {}
+            // }
         }
     }
 
@@ -405,6 +455,32 @@ impl World {
     // ─── Deletion Methods ────────────────────────────────────────────────────────────────
     pub fn delete_source(&mut self, xy: (usize, usize)) {
         self.source_grid[xy] = None;
+    }
+
+    // ─── Other ───────────────────────────────────────────────────────────────────────────
+    pub fn draw_and_reset_all_particles(&mut self) {
+        for x in 0..self.width {
+            for y in 0..self.height {
+                let ptype = self.particle_grid[(x, y)].particle_type;
+                self.particle_grid[(x, y)].updated = false;
+                if ptype.properties().moves {
+                    self.particle_grid[(x, y)].set_moved(false);
+                }
+
+                self.particle_grid[(x, y)].draw(x, y);
+                if let Some(portal) = &self.portal_grid[(x, y)] {
+                    portal.draw(x, y);
+                }
+                if let Some(source) = &self.source_grid[(x, y)] {
+                    source.draw(x, y);
+                }
+            }
+        }
+    }
+
+    // TODO: Consider pre-calculating this and storing it as a vector
+    fn index_to_xy(&self, i: usize) -> (usize, usize) {
+        (i % self.width, i / self.width)
     }
 
     // ─── Movement Methods ────────────────────────────────────────────────────────────────
@@ -494,6 +570,10 @@ impl World {
         self.particle_grid[xy].particle_type.properties().moves
     }
 
+    fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
+        &self.particle_grid[self.relative_xy(xy, dxdy)]
+    }
+
     fn relative_xy(&self, xy: (usize, usize), dxdy: (isize, isize)) -> (usize, usize) {
         // dbg!(xy, dxdy);
         match &self.portal_grid[xy] {
@@ -555,31 +635,6 @@ impl World {
                 break;
             }
         }
-    }
-
-    pub fn draw_and_reset_all_particles(&mut self) {
-        for x in 0..self.width {
-            for y in 0..self.height {
-                let ptype = self.particle_grid[(x, y)].particle_type;
-                self.particle_grid[(x, y)].updated = false;
-                if ptype.properties().moves {
-                    self.particle_grid[(x, y)].set_moved(false);
-                }
-
-                self.particle_grid[(x, y)].draw(x, y);
-                if let Some(portal) = &self.portal_grid[(x, y)] {
-                    portal.draw(x, y);
-                }
-                if let Some(source) = &self.source_grid[(x, y)] {
-                    source.draw(x, y);
-                }
-            }
-        }
-    }
-
-    // TODO: Consider pre-calculating this and storing it as a vector
-    fn index_to_xy(&self, i: usize) -> (usize, usize) {
-        (i % self.width, i / self.width)
     }
 }
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
