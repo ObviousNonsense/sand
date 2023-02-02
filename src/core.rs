@@ -16,6 +16,8 @@ pub enum ParticleType {
     Sand,
     Water,
     Concrete,
+    HeavyWater,
+    HeavySand,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -54,9 +56,21 @@ impl ParticleType {
                 moves: true,
                 fluid: false,
             },
+            ParticleType::HeavySand => ParticleTypeProperties {
+                base_color: BLACK,
+                weight: 100.0,
+                moves: true,
+                fluid: false,
+            },
             ParticleType::Water => ParticleTypeProperties {
                 base_color: BLUE,
                 weight: 60.0,
+                moves: true,
+                fluid: true,
+            },
+            ParticleType::HeavyWater => ParticleTypeProperties {
+                base_color: PURPLE,
+                weight: 70.0,
                 moves: true,
                 fluid: true,
             },
@@ -105,22 +119,6 @@ impl Particle {
         } else {
             unreachable!("Called set_moved on non-movable particle {:?}", self);
         }
-    }
-
-    fn moved(&self) -> Option<bool> {
-        self.moved
-    }
-
-    fn toggle_moving_right(&mut self) {
-        if self.particle_type.properties().fluid {
-            self.moving_right = Some(!self.moving_right.unwrap());
-        } else {
-            unreachable!("Called set_moving_right on non-fluid particle {:?}", self);
-        }
-    }
-
-    fn moving_right(&self) -> Option<bool> {
-        self.moving_right
     }
 
     fn draw(&self, x: usize, y: usize) {
@@ -182,6 +180,8 @@ impl Particle {
         }
     }
 
+    /// Checks if this particle can and will move in the given direction.
+    /// Assumes that if it can move there it will (sets self.moved to true)
     fn check_movement_direction(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> bool {
         let rand_factor = api.random::<f32>();
         let mut other_p = api.neighbour_mut(dxdy);
@@ -321,14 +321,16 @@ impl<'a> WorldApi<'a> {
         self.world.rng.gen::<T>()
     }
 
-    fn neighbour(&self, dxdy: (isize, isize)) -> &Particle {
-        self.world.relative_particle(self.xy, dxdy)
-    }
+    // fn neighbour(&self, dxdy: (isize, isize)) -> &Particle {
+    //     self.world.relative_particle(self.xy, dxdy)
+    // }
 
     fn neighbour_mut(&mut self, dxdy: (isize, isize)) -> &mut Particle {
         self.world.relative_particle_mut(self.xy, dxdy)
     }
 
+    /// Swaps the particle with the one dxdy away.
+    /// Do not attempt to mutate the particle after calling this.
     fn swap_with(&mut self, dxdy: (isize, isize), particle: Particle) {
         let other_xy = self.world.relative_xy(self.xy, dxdy);
         let other_p = self.world.particle_grid[other_xy].clone();
@@ -425,18 +427,6 @@ impl World {
             }
 
             particle_clone.update(WorldApi { world: self, xy });
-
-            // self.particle_grid[xy].updated = true;
-
-            // match particle_clone.particle_type {
-            //     ParticleType::Sand => {
-            //         self.sand_movement(xy, particle_clone);
-            //     }
-            //     ParticleType::Water => {
-            //         self.fluid_movement(xy, particle_clone);
-            //     }
-            //     _ => {}
-            // }
         }
     }
 
@@ -544,96 +534,9 @@ impl World {
         (i % self.width, i / self.width)
     }
 
-    // ─── Movement Methods ────────────────────────────────────────────────────────────────
-    fn try_grid_position(
-        &mut self,
-        xy1: (usize, usize),
-        xy2: (usize, usize),
-        // try_swap: bool, // Not relevant until there are things that move up
-    ) -> bool {
-        let other_p = &self.particle_grid[xy2];
-        let my_weight = self.weight_at(xy1);
-        let other_weight = self.weight_at(xy2);
-
-        // If the other position is empty, move into it
-        if other_p.particle_type == ParticleType::Empty {
-            // This particle has moved
-            self.particle_grid[xy1].set_moved(true);
-            self.swap_particles(xy1, xy2);
-            return true;
-        } else if self.movable_at(xy2) && !other_p.moved().unwrap() {
-            // If there's something there and it's movable and hasn't already moved,
-            // try to displace it
-            if my_weight * self.rng.gen::<f32>() > other_weight {
-                // Try getting the other particle to move before we take its place:
-                // If we get here, both particles will definitely move:
-                self.particle_grid[xy1].set_moved(true);
-                self.particle_grid[xy2].set_moved(true);
-                self.displace_particle(xy1, xy2);
-                return true;
-            }
-        }
-        false
-    }
-
-    fn displace_particle(&mut self, xy1: (usize, usize), xy2: (usize, usize)) {
-        // xy1 is the location of the particle initially trying to move
-        // xy2 is the location of the particle being displaced
-
-        // First try moving down, then down+right, down+left, right, left, up+right, up+left, up
-        let positions_to_try = vec![
-            (0, 1),
-            (1, 1),
-            (-1, 1),
-            (1, 0),
-            (-1, 0),
-            (1, -1),
-            (-1, -1),
-            (0, -1),
-        ];
-        // let mut moved = false;
-        for pos in positions_to_try {
-            // xy3 is the location we're checking if we can move to
-            let xy3 = self.relative_xy(xy2, pos);
-            // If it's the same location as the particle that's trying to
-            // displace us, don't bother (infinite loop?)
-            if xy1 == xy3 {
-                continue;
-            }
-            // Try moving there
-            let moved = self.try_grid_position(xy2, xy3);
-
-            // If we moved, we're done
-            if moved {
-                // self.particle_grid[xy3].set_moved(true);
-                break;
-            }
-        }
-
-        // If the particle at xy2 moved, we take its place.
-        // If it didn't, we swap with it.
-        // Either way, we swap with whatever's now at xy2
-        self.swap_particles(xy1, xy2);
-    }
-
-    fn swap_particles(&mut self, xy1: (usize, usize), xy2: (usize, usize)) {
-        (self.particle_grid[xy1], self.particle_grid[xy2]) = (
-            self.particle_grid[xy2].clone(),
-            self.particle_grid[xy1].clone(),
-        );
-    }
-
-    fn weight_at(&self, xy: (usize, usize)) -> f32 {
-        self.particle_grid[xy].particle_type.properties().weight
-    }
-
-    fn movable_at(&self, xy: (usize, usize)) -> bool {
-        self.particle_grid[xy].particle_type.properties().moves
-    }
-
-    fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
-        &self.particle_grid[self.relative_xy(xy, dxdy)]
-    }
+    // fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
+    //     &self.particle_grid[self.relative_xy(xy, dxdy)]
+    // }
 
     fn relative_particle_mut(&mut self, xy: (usize, usize), dxdy: (isize, isize)) -> &mut Particle {
         let (new_x, new_y) = self.relative_xy(xy, dxdy);
@@ -658,49 +561,6 @@ impl World {
             (xy.0 as isize + dxdy.0) as usize,
             (xy.1 as isize + dxdy.1) as usize,
         )
-    }
-
-    fn sand_movement(&mut self, xy: (usize, usize), particle_clone: Particle) {
-        if particle_clone.moved().unwrap() {
-            return;
-        }
-        let r = self.rng.gen();
-        let right: isize = if r { -1 } else { 1 };
-        let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
-
-        for dxdy in check_directions.iter() {
-            let other_xy = self.relative_xy(xy, *dxdy);
-            let moved = self.try_grid_position(xy, other_xy);
-            if moved {
-                break;
-            }
-        }
-    }
-
-    fn fluid_movement(&mut self, xy: (usize, usize), particle_clone: Particle) {
-        if particle_clone.moved().unwrap() {
-            return;
-        }
-        // let r = self.rng.gen();
-        // let right: isize = if r { -1 } else { 1 };
-
-        let check_directions = if particle_clone.moving_right().unwrap() {
-            [(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)]
-        } else {
-            [(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)]
-        };
-
-        for (dxdy, k) in check_directions.iter().zip(0..5) {
-            let other_xy = self.relative_xy(xy, *dxdy);
-            let moved = self.try_grid_position(xy, other_xy);
-
-            if moved {
-                if k == 4 {
-                    self.particle_grid[other_xy].toggle_moving_right();
-                }
-                break;
-            }
-        }
     }
 }
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─

@@ -11,7 +11,7 @@ mod core;
 const GRID_WIDTH_: usize = 50;
 const GRID_HEIGHT_: usize = 50;
 const PIXELS_PER_PARTICLE: f32 = 16.0;
-const WORLD_PX0: f32 = 300.0;
+const WORLD_PX0: f32 = 400.0;
 const WORLD_PY0: f32 = 0.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
@@ -566,8 +566,18 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         );
                         ui.selectable_value(
                             &mut settings.placement_type,
+                            ParticleType::HeavySand,
+                            "Black Sand",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
                             ParticleType::Water,
                             "Water",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::HeavyWater,
+                            "Purple Water",
                         );
                         ui.selectable_value(
                             &mut settings.placement_type,
