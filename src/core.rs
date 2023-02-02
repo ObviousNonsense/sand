@@ -1,5 +1,5 @@
 use super::*;
-use ::rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
+use ::rand::{prelude::Distribution, rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
 use array2d::Array2D;
 
 // #[derive(Debug, PartialEq)]
@@ -16,6 +16,8 @@ pub enum ParticleType {
     Sand,
     Water,
     Concrete,
+    HeavyWater,
+    HeavySand,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -27,38 +29,52 @@ pub struct ParticleTypeProperties {
     fluid: bool,
 }
 
-pub fn base_properties(particle_type: ParticleType) -> ParticleTypeProperties {
-    match particle_type {
-        ParticleType::Border => ParticleTypeProperties {
-            base_color: GRAY,
-            weight: f32::INFINITY,
-            moves: false,
-            fluid: false,
-        },
-        ParticleType::Concrete => ParticleTypeProperties {
-            base_color: GRAY,
-            weight: f32::INFINITY,
-            moves: false,
-            fluid: false,
-        },
-        ParticleType::Empty => ParticleTypeProperties {
-            base_color: Color::new(0.2, 0.2, 0.2, 1.0),
-            weight: 1.0,
-            moves: false,
-            fluid: false,
-        },
-        ParticleType::Sand => ParticleTypeProperties {
-            base_color: YELLOW,
-            weight: 90.0,
-            moves: true,
-            fluid: false,
-        },
-        ParticleType::Water { .. } => ParticleTypeProperties {
-            base_color: BLUE,
-            weight: 60.0,
-            moves: true,
-            fluid: true,
-        },
+impl ParticleType {
+    pub const fn properties(&self) -> ParticleTypeProperties {
+        match self {
+            ParticleType::Border => ParticleTypeProperties {
+                base_color: GRAY,
+                weight: f32::INFINITY,
+                moves: false,
+                fluid: false,
+            },
+            ParticleType::Concrete => ParticleTypeProperties {
+                base_color: GRAY,
+                weight: f32::INFINITY,
+                moves: false,
+                fluid: false,
+            },
+            ParticleType::Empty => ParticleTypeProperties {
+                base_color: Color::new(0.2, 0.2, 0.2, 1.0),
+                weight: 1.0,
+                moves: false,
+                fluid: false,
+            },
+            ParticleType::Sand => ParticleTypeProperties {
+                base_color: YELLOW,
+                weight: 90.0,
+                moves: true,
+                fluid: false,
+            },
+            ParticleType::HeavySand => ParticleTypeProperties {
+                base_color: BLACK,
+                weight: 100.0,
+                moves: true,
+                fluid: false,
+            },
+            ParticleType::Water => ParticleTypeProperties {
+                base_color: BLUE,
+                weight: 60.0,
+                moves: true,
+                fluid: true,
+            },
+            ParticleType::HeavyWater => ParticleTypeProperties {
+                base_color: PURPLE,
+                weight: 70.0,
+                moves: true,
+                fluid: true,
+            },
+        }
     }
 }
 
@@ -76,13 +92,13 @@ impl Particle {
     fn new(particle_type: ParticleType, rng: &mut ThreadRng) -> Self {
         // TODO: modulate individual particle color relative to base_color
 
-        let moved = if base_properties(particle_type).moves {
+        let moved = if particle_type.properties().moves {
             Some(false)
         } else {
             None
         };
 
-        let moving_right = if base_properties(particle_type).fluid {
+        let moving_right = if particle_type.properties().fluid {
             Some(rng.gen())
         } else {
             None
@@ -98,31 +114,95 @@ impl Particle {
     }
 
     fn set_moved(&mut self, val: bool) {
-        if base_properties(self.particle_type).moves {
+        if self.particle_type.properties().moves {
             self.moved = Some(val);
         } else {
             unreachable!("Called set_moved on non-movable particle {:?}", self);
         }
     }
 
-    fn moved(&self) -> Option<bool> {
-        self.moved
+    fn draw(&self, x: usize, y: usize) {
+        draw_particle(x, y, self.particle_type.properties().base_color);
     }
 
-    fn toggle_moving_right(&mut self) {
-        if base_properties(self.particle_type).fluid {
-            self.moving_right = Some(!self.moving_right.unwrap());
-        } else {
-            unreachable!("Called set_moving_right on non-fluid particle {:?}", self);
+    fn update(&mut self, mut api: WorldApi) {
+        self.updated = true;
+        if self.particle_type.properties().moves {
+            self.movement(&mut api);
         }
     }
 
-    fn moving_right(&self) -> Option<bool> {
-        self.moving_right
+    fn movement(&mut self, api: &mut WorldApi) {
+        if self.moved.unwrap() {
+            return;
+        }
+
+        if self.particle_type.properties().fluid {
+            self.fluid_movement(api);
+        } else {
+            self.sand_movement(api);
+        }
     }
 
-    fn draw(&self, x: usize, y: usize) {
-        draw_particle(x, y, base_properties(self.particle_type).base_color);
+    fn sand_movement(&mut self, api: &mut WorldApi) {
+        let r = api.random::<bool>();
+        let right: isize = if r { -1 } else { 1 };
+        let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+
+        for dxdy in check_directions.into_iter() {
+            if self.check_movement_direction(dxdy, api) {
+                api.swap_with(dxdy, self.to_owned());
+                return;
+            }
+        }
+    }
+
+    fn fluid_movement(&mut self, api: &mut WorldApi) {
+        let (check_directions, last_dir) = if self.moving_right.unwrap() {
+            ([(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)], (-1, 0))
+        } else {
+            ([(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)], (1, 0))
+        };
+
+        for dxdy in check_directions.into_iter() {
+            if self.check_movement_direction(dxdy, api) {
+                if dxdy == (-1, 1) {
+                    self.moving_right = Some(false)
+                }
+                if dxdy == (1, 1) {
+                    self.moving_right = Some(true)
+                } else if dxdy == last_dir {
+                    self.moving_right = Some(!self.moving_right.unwrap());
+                }
+                api.swap_with(dxdy, self.to_owned());
+                return;
+            }
+        }
+    }
+
+    /// Checks if this particle can and will move in the given direction.
+    /// Assumes that if it can move there it will (sets self.moved to true)
+    fn check_movement_direction(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> bool {
+        let rand_factor = api.random::<f32>();
+        let mut other_p = api.neighbour_mut(dxdy);
+
+        // If the other position is empty, move into it
+        if other_p.particle_type == ParticleType::Empty {
+            // This particle will move
+            self.moved = Some(true);
+            return true;
+        } else if other_p.particle_type.properties().moves && !other_p.moved.unwrap() {
+            // If there's something there and it's moveable and it hasn't
+            // already moved, then we will swap with it
+            let my_weight = self.particle_type.properties().weight;
+            let other_weight = other_p.particle_type.properties().weight;
+            if my_weight * rand_factor > other_weight {
+                other_p.moved = Some(true);
+                self.moved = Some(true);
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -131,6 +211,7 @@ pub fn draw_particle(x: usize, y: usize, color: Color) {
     draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
 }
 
+/* #region  */
 #[derive(Debug, Clone)]
 struct ParticleSource {
     particle_type: ParticleType,
@@ -139,7 +220,7 @@ struct ParticleSource {
 
 impl ParticleSource {
     fn draw(&self, x: usize, y: usize) {
-        let mut color = base_properties(self.particle_type).base_color;
+        let mut color = self.particle_type.properties().base_color;
         color.a = 0.5;
         color.r -= 0.1;
         color.g -= 0.1;
@@ -225,6 +306,40 @@ pub fn draw_portal(x: usize, y: usize, direction: Direction, color: Color) {
     draw_rectangle(ptx, pty, w, h, color);
 }
 
+/* #endregion */
+
+struct WorldApi<'a> {
+    world: &'a mut World,
+    xy: (usize, usize),
+}
+
+impl<'a> WorldApi<'a> {
+    fn random<T>(&mut self) -> T
+    where
+        ::rand::distributions::Standard: Distribution<T>,
+    {
+        self.world.rng.gen::<T>()
+    }
+
+    // fn neighbour(&self, dxdy: (isize, isize)) -> &Particle {
+    //     self.world.relative_particle(self.xy, dxdy)
+    // }
+
+    fn neighbour_mut(&mut self, dxdy: (isize, isize)) -> &mut Particle {
+        self.world.relative_particle_mut(self.xy, dxdy)
+    }
+
+    /// Swaps the particle with the one dxdy away.
+    /// Do not attempt to mutate the particle after calling this.
+    fn swap_with(&mut self, dxdy: (isize, isize), particle: Particle) {
+        let other_xy = self.world.relative_xy(self.xy, dxdy);
+        let other_p = self.world.particle_grid[other_xy].clone();
+        self.world.particle_grid[self.xy] = other_p;
+        self.world.particle_grid[other_xy] = particle;
+        self.xy = other_xy;
+    }
+}
+
 // ─── World ─────────────────────────────────────────────────────────────────────────────────── ✣ ─
 pub struct World {
     particle_grid: Array2D<Particle>,
@@ -302,24 +417,16 @@ impl World {
             .collect();
         idx_range.shuffle(&mut self.rng);
         for idx in idx_range.iter() {
-            let idx = *idx;
-            let xy = self.index_to_xy(idx);
-            let particle_clone = self.particle_grid[xy].clone();
+            // let idx = *idx;
+            let xy = self.index_to_xy(*idx);
+
+            let mut particle_clone = self.particle_grid[xy].clone();
 
             if particle_clone.updated {
                 continue;
             }
-            self.particle_grid[xy].updated = true;
 
-            match particle_clone.particle_type {
-                ParticleType::Sand => {
-                    self.sand_movement(xy, particle_clone);
-                }
-                ParticleType::Water => {
-                    self.fluid_movement(xy, particle_clone);
-                }
-                _ => {}
-            }
+            particle_clone.update(WorldApi { world: self, xy });
         }
     }
 
@@ -401,91 +508,39 @@ impl World {
         self.source_grid[xy] = None;
     }
 
-    // ─── Movement Methods ────────────────────────────────────────────────────────────────
-    fn try_grid_position(
-        &mut self,
-        xy1: (usize, usize),
-        xy2: (usize, usize),
-        // try_swap: bool, // Not relevant until there are things that move up
-    ) -> bool {
-        let other_p = &self.particle_grid[xy2];
-        let my_weight = self.weight_at(xy1);
-        let other_weight = self.weight_at(xy2);
+    // ─── Other ───────────────────────────────────────────────────────────────────────────
+    pub fn draw_and_reset_all_particles(&mut self) {
+        for x in 0..self.width {
+            for y in 0..self.height {
+                let ptype = self.particle_grid[(x, y)].particle_type;
+                self.particle_grid[(x, y)].updated = false;
+                if ptype.properties().moves {
+                    self.particle_grid[(x, y)].set_moved(false);
+                }
 
-        // If the other position is empty, move into it
-        if other_p.particle_type == ParticleType::Empty {
-            // This particle has moved
-            self.particle_grid[xy1].set_moved(true);
-            self.swap_particles(xy1, xy2);
-            return true;
-        } else if self.movable_at(xy2) && !other_p.moved().unwrap() {
-            // If there's something there and it's movable and hasn't already moved,
-            // try to displace it
-            if my_weight * self.rng.gen::<f32>() > other_weight {
-                // Try getting the other particle to move before we take its place:
-                // If we get here, both particles will definitely move:
-                self.particle_grid[xy1].set_moved(true);
-                self.particle_grid[xy2].set_moved(true);
-                self.displace_particle(xy1, xy2);
-                return true;
+                self.particle_grid[(x, y)].draw(x, y);
+                if let Some(portal) = &self.portal_grid[(x, y)] {
+                    portal.draw(x, y);
+                }
+                if let Some(source) = &self.source_grid[(x, y)] {
+                    source.draw(x, y);
+                }
             }
         }
-        false
     }
 
-    fn displace_particle(&mut self, xy1: (usize, usize), xy2: (usize, usize)) {
-        // xy1 is the location of the particle initially trying to move
-        // xy2 is the location of the particle being displaced
-
-        // First try moving down, then down+right, down+left, right, left, up+right, up+left, up
-        let positions_to_try = vec![
-            (0, 1),
-            (1, 1),
-            (-1, 1),
-            (1, 0),
-            (-1, 0),
-            (1, -1),
-            (-1, -1),
-            (0, -1),
-        ];
-        // let mut moved = false;
-        for pos in positions_to_try {
-            // xy3 is the location we're checking if we can move to
-            let xy3 = self.relative_xy(xy2, pos);
-            // If it's the same location as the particle that's trying to
-            // displace us, don't bother (infinite loop?)
-            if xy1 == xy3 {
-                continue;
-            }
-            // Try moving there
-            let moved = self.try_grid_position(xy2, xy3);
-
-            // If we moved, we're done
-            if moved {
-                // self.particle_grid[xy3].set_moved(true);
-                break;
-            }
-        }
-
-        // If the particle at xy2 moved, we take its place.
-        // If it didn't, we swap with it.
-        // Either way, we swap with whatever's now at xy2
-        self.swap_particles(xy1, xy2);
+    // TODO: Consider pre-calculating this and storing it as a vector
+    fn index_to_xy(&self, i: usize) -> (usize, usize) {
+        (i % self.width, i / self.width)
     }
 
-    fn swap_particles(&mut self, xy1: (usize, usize), xy2: (usize, usize)) {
-        (self.particle_grid[xy1], self.particle_grid[xy2]) = (
-            self.particle_grid[xy2].clone(),
-            self.particle_grid[xy1].clone(),
-        );
-    }
+    // fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
+    //     &self.particle_grid[self.relative_xy(xy, dxdy)]
+    // }
 
-    fn weight_at(&self, xy: (usize, usize)) -> f32 {
-        base_properties(self.particle_grid[xy].particle_type).weight
-    }
-
-    fn movable_at(&self, xy: (usize, usize)) -> bool {
-        base_properties(self.particle_grid[xy].particle_type).moves
+    fn relative_particle_mut(&mut self, xy: (usize, usize), dxdy: (isize, isize)) -> &mut Particle {
+        let (new_x, new_y) = self.relative_xy(xy, dxdy);
+        self.particle_grid.get_mut(new_x, new_y).unwrap()
     }
 
     fn relative_xy(&self, xy: (usize, usize), dxdy: (isize, isize)) -> (usize, usize) {
@@ -506,74 +561,6 @@ impl World {
             (xy.0 as isize + dxdy.0) as usize,
             (xy.1 as isize + dxdy.1) as usize,
         )
-    }
-
-    fn sand_movement(&mut self, xy: (usize, usize), particle_clone: Particle) {
-        if particle_clone.moved().unwrap() {
-            return;
-        }
-        let r = self.rng.gen();
-        let right: isize = if r { -1 } else { 1 };
-        let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
-
-        for dxdy in check_directions.iter() {
-            let other_xy = self.relative_xy(xy, *dxdy);
-            let moved = self.try_grid_position(xy, other_xy);
-            if moved {
-                break;
-            }
-        }
-    }
-
-    fn fluid_movement(&mut self, xy: (usize, usize), particle_clone: Particle) {
-        if particle_clone.moved().unwrap() {
-            return;
-        }
-        // let r = self.rng.gen();
-        // let right: isize = if r { -1 } else { 1 };
-
-        let check_directions = if particle_clone.moving_right().unwrap() {
-            [(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)]
-        } else {
-            [(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)]
-        };
-
-        for (dxdy, k) in check_directions.iter().zip(0..5) {
-            let other_xy = self.relative_xy(xy, *dxdy);
-            let moved = self.try_grid_position(xy, other_xy);
-
-            if moved {
-                if k == 4 {
-                    self.particle_grid[other_xy].toggle_moving_right();
-                }
-                break;
-            }
-        }
-    }
-
-    pub fn draw_and_reset_all_particles(&mut self) {
-        for x in 0..self.width {
-            for y in 0..self.height {
-                let ptype = self.particle_grid[(x, y)].particle_type;
-                self.particle_grid[(x, y)].updated = false;
-                if base_properties(ptype).moves {
-                    self.particle_grid[(x, y)].set_moved(false);
-                }
-
-                self.particle_grid[(x, y)].draw(x, y);
-                if let Some(portal) = &self.portal_grid[(x, y)] {
-                    portal.draw(x, y);
-                }
-                if let Some(source) = &self.source_grid[(x, y)] {
-                    source.draw(x, y);
-                }
-            }
-        }
-    }
-
-    // TODO: Consider pre-calculating this and storing it as a vector
-    fn index_to_xy(&self, i: usize) -> (usize, usize) {
-        (i % self.width, i / self.width)
     }
 }
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
