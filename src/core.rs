@@ -128,31 +128,10 @@ impl Particle {
     }
 
     fn update(&mut self, mut api: WorldApi) {
+        self.updated = true;
         if self.particle_type.properties().moves {
             self.movement(&mut api);
         }
-        // match self.particle_type {
-        //     ParticleType::Sand => {
-        //         if self.moved.unwrap() {
-        //             return;
-        //         }
-        //         let r = api.random::<bool>();
-
-        //         let right: isize = if r { -1 } else { 1 };
-        //         let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
-
-        //         for dxdy in check_directions.into_iter() {
-        //             let other_p = api.neighbour(dxdy);
-
-        //             if other_p.particle_type == ParticleType::Empty {
-        //                 self.moved = Some(true);
-        //                 api.swap_with(dxdy, self.to_owned());
-        //                 break;
-        //             }
-        //         }
-        //     }
-        //     _ => {}
-        // }
     }
 
     fn movement(&mut self, api: &mut WorldApi) {
@@ -171,10 +150,9 @@ impl Particle {
         let r = api.random::<bool>();
         let right: isize = if r { -1 } else { 1 };
         let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+
         for dxdy in check_directions.into_iter() {
-            let other_p = api.neighbour(dxdy);
-            if other_p.particle_type == ParticleType::Empty {
-                self.moved = Some(true);
+            if self.check_movement_direction(dxdy, api) {
                 api.swap_with(dxdy, self.to_owned());
                 return;
             }
@@ -182,28 +160,49 @@ impl Particle {
     }
 
     fn fluid_movement(&mut self, api: &mut WorldApi) {
-        let check_directions = if self.moving_right.unwrap() {
-            [(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)]
+        let (check_directions, last_dir) = if self.moving_right.unwrap() {
+            ([(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)], (-1, 0))
         } else {
-            [(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)]
+            ([(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)], (1, 0))
         };
 
-        for (dxdy, k) in check_directions.into_iter().zip(0..5) {
-            let other_p = api.neighbour(dxdy);
-            if other_p.particle_type == ParticleType::Empty {
-                self.moved = Some(true);
+        for dxdy in check_directions.into_iter() {
+            if self.check_movement_direction(dxdy, api) {
                 if dxdy == (-1, 1) {
                     self.moving_right = Some(false)
                 }
                 if dxdy == (1, 1) {
                     self.moving_right = Some(true)
-                } else if k == 4 {
+                } else if dxdy == last_dir {
                     self.moving_right = Some(!self.moving_right.unwrap());
                 }
                 api.swap_with(dxdy, self.to_owned());
                 return;
             }
         }
+    }
+
+    fn check_movement_direction(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> bool {
+        let rand_factor = api.random::<f32>();
+        let mut other_p = api.neighbour_mut(dxdy);
+
+        // If the other position is empty, move into it
+        if other_p.particle_type == ParticleType::Empty {
+            // This particle will move
+            self.moved = Some(true);
+            return true;
+        } else if other_p.particle_type.properties().moves && !other_p.moved.unwrap() {
+            // If there's something there and it's moveable and it hasn't
+            // already moved, then we will swap with it
+            let my_weight = self.particle_type.properties().weight;
+            let other_weight = other_p.particle_type.properties().weight;
+            if my_weight * rand_factor > other_weight {
+                other_p.moved = Some(true);
+                self.moved = Some(true);
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -324,6 +323,10 @@ impl<'a> WorldApi<'a> {
 
     fn neighbour(&self, dxdy: (isize, isize)) -> &Particle {
         self.world.relative_particle(self.xy, dxdy)
+    }
+
+    fn neighbour_mut(&mut self, dxdy: (isize, isize)) -> &mut Particle {
+        self.world.relative_particle_mut(self.xy, dxdy)
     }
 
     fn swap_with(&mut self, dxdy: (isize, isize), particle: Particle) {
@@ -630,6 +633,11 @@ impl World {
 
     fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
         &self.particle_grid[self.relative_xy(xy, dxdy)]
+    }
+
+    fn relative_particle_mut(&mut self, xy: (usize, usize), dxdy: (isize, isize)) -> &mut Particle {
+        let (new_x, new_y) = self.relative_xy(xy, dxdy);
+        self.particle_grid.get_mut(new_x, new_y).unwrap()
     }
 
     fn relative_xy(&self, xy: (usize, usize), dxdy: (isize, isize)) -> (usize, usize) {
