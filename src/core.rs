@@ -88,6 +88,7 @@ pub struct Particle {
     moving_right: Option<bool>,
 }
 
+// General Particle Methods
 impl Particle {
     fn new(particle_type: ParticleType, rng: &mut ThreadRng) -> Self {
         // TODO: modulate individual particle color relative to base_color
@@ -113,14 +114,6 @@ impl Particle {
         }
     }
 
-    fn set_moved(&mut self, val: bool) {
-        if self.particle_type.properties().moves {
-            self.moved = Some(val);
-        } else {
-            unreachable!("Called set_moved on non-movable particle {:?}", self);
-        }
-    }
-
     fn draw(&self, x: usize, y: usize) {
         draw_particle(x, y, self.particle_type.properties().base_color);
     }
@@ -131,7 +124,10 @@ impl Particle {
             self.movement(&mut api);
         }
     }
+}
 
+/// Movement Methods
+impl Particle {
     fn movement(&mut self, api: &mut WorldApi) {
         if self.moved.unwrap() {
             return;
@@ -203,6 +199,14 @@ impl Particle {
             }
         }
         false
+    }
+
+    fn set_moved(&mut self, val: bool) {
+        if self.particle_type.properties().moves {
+            self.moved = Some(val);
+        } else {
+            unreachable!("Called set_moved on non-movable particle {:?}", self);
+        }
     }
 }
 
