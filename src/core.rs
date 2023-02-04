@@ -18,6 +18,7 @@ pub enum ParticleType {
     Concrete,
     HeavyWater,
     HeavySand,
+    Steam,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -71,6 +72,12 @@ impl ParticleType {
             ParticleType::HeavyWater => ParticleTypeProperties {
                 base_color: PURPLE,
                 weight: 70.0,
+                moves: true,
+                fluid: true,
+            },
+            ParticleType::Steam => ParticleTypeProperties {
+                base_color: Color::new(0.753, 0.824, 0.949, 1.0),
+                weight: 0.5,
                 moves: true,
                 fluid: true,
             },
@@ -161,7 +168,12 @@ impl Particle {
         };
 
         for dxdy in check_directions.into_iter() {
-            if self.check_movement_direction(dxdy, api) {
+            let dxdy_new = if self.rises() {
+                (dxdy.0, -dxdy.1)
+            } else {
+                dxdy
+            };
+            if self.check_movement_direction(dxdy_new, api) {
                 if dxdy == (-1, 1) {
                     self.moving_right = Some(false)
                 }
@@ -170,10 +182,14 @@ impl Particle {
                 } else if dxdy == last_dir {
                     self.moving_right = Some(!self.moving_right.unwrap());
                 }
-                api.swap_with(dxdy, self.to_owned());
+                api.swap_with(dxdy_new, self.to_owned());
                 return;
             }
         }
+    }
+
+    fn rises(&self) -> bool {
+        self.particle_type.properties().weight < ParticleType::Empty.properties().weight
     }
 
     /// Checks if this particle can and will move in the given direction.
@@ -183,17 +199,24 @@ impl Particle {
         let mut other_p = api.neighbour_mut(dxdy);
 
         // If the other position is empty, move into it
-        if other_p.particle_type == ParticleType::Empty {
-            // This particle will move
-            self.moved = Some(true);
-            return true;
-        } else if other_p.particle_type.properties().moves && !other_p.moved.unwrap() {
+        // if other_p.particle_type == ParticleType::Empty {
+        //     // This particle will move
+        //     self.moved = Some(true);
+        //     return true;
+        // } else
+        if other_p.particle_type == ParticleType::Empty
+            || other_p.particle_type.properties().moves && !other_p.moved.unwrap()
+        {
             // If there's something there and it's moveable and it hasn't
-            // already moved, then we will swap with it
+            // already moved, then we might swap with it
             let my_weight = self.particle_type.properties().weight;
             let other_weight = other_p.particle_type.properties().weight;
-            if my_weight * rand_factor > other_weight {
-                other_p.moved = Some(true);
+            if (!self.rises() && (my_weight * rand_factor > other_weight))
+                || (self.rises() && (other_weight * rand_factor > my_weight))
+            {
+                if other_p.particle_type != ParticleType::Empty {
+                    other_p.moved = Some(true);
+                }
                 self.moved = Some(true);
                 return true;
             }

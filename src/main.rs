@@ -559,30 +559,37 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         ui.label("Water");
                         ui.label("Concrete");
                     } else {
+                        // ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::GOLD;
+                        // ui.visuals_mut().widgets.noninteractive.bg_fill = egui::Color32::GOLD;
                         ui.selectable_value(
                             &mut settings.placement_type,
                             ParticleType::Sand,
                             "Sand",
                         );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::HeavySand,
-                            "Black Sand",
-                        );
+                        // ui.selectable_value(
+                        //     &mut settings.placement_type,
+                        //     ParticleType::HeavySand,
+                        //     "Black Sand",
+                        // );
                         ui.selectable_value(
                             &mut settings.placement_type,
                             ParticleType::Water,
                             "Water",
                         );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::HeavyWater,
-                            "Purple Water",
-                        );
+                        // ui.selectable_value(
+                        //     &mut settings.placement_type,
+                        //     ParticleType::HeavyWater,
+                        //     "Purple Water",
+                        // );
                         ui.selectable_value(
                             &mut settings.placement_type,
                             ParticleType::Concrete,
                             "Concrete",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Steam,
+                            "Steam",
                         );
                     }
                     ui.allocate_space(ui.available_size());
