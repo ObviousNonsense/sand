@@ -16,8 +16,6 @@ pub enum ParticleType {
     Sand,
     Water,
     Concrete,
-    HeavyWater,
-    HeavySand,
     Steam,
 }
 
@@ -28,6 +26,7 @@ pub struct ParticleTypeProperties {
     pub weight: f32,
     moves: bool,
     fluid: bool,
+    condensates: bool,
 }
 
 impl ParticleType {
@@ -38,48 +37,42 @@ impl ParticleType {
                 weight: f32::INFINITY,
                 moves: false,
                 fluid: false,
+                condensates: false,
             },
             ParticleType::Concrete => ParticleTypeProperties {
                 base_color: GRAY,
                 weight: f32::INFINITY,
                 moves: false,
                 fluid: false,
+                condensates: false,
             },
             ParticleType::Empty => ParticleTypeProperties {
                 base_color: Color::new(0.2, 0.2, 0.2, 1.0),
                 weight: 1.0,
                 moves: false,
                 fluid: false,
+                condensates: false,
             },
             ParticleType::Sand => ParticleTypeProperties {
                 base_color: YELLOW,
                 weight: 90.0,
                 moves: true,
                 fluid: false,
-            },
-            ParticleType::HeavySand => ParticleTypeProperties {
-                base_color: BLACK,
-                weight: 100.0,
-                moves: true,
-                fluid: false,
+                condensates: false,
             },
             ParticleType::Water => ParticleTypeProperties {
                 base_color: BLUE,
                 weight: 60.0,
                 moves: true,
                 fluid: true,
-            },
-            ParticleType::HeavyWater => ParticleTypeProperties {
-                base_color: PURPLE,
-                weight: 70.0,
-                moves: true,
-                fluid: true,
+                condensates: false,
             },
             ParticleType::Steam => ParticleTypeProperties {
                 base_color: Color::new(0.753, 0.824, 0.949, 1.0),
                 weight: 0.5,
                 moves: true,
                 fluid: true,
+                condensates: true,
             },
         }
     }
@@ -93,6 +86,8 @@ pub struct Particle {
     updated: bool,
     moved: Option<bool>,
     moving_right: Option<bool>,
+    condensation_countdown: Option<i16>,
+    initial_condensation_countdown: Option<i16>,
 }
 
 // General Particle Methods
@@ -112,12 +107,20 @@ impl Particle {
             None
         };
 
+        let condensation_countdown = if particle_type.properties().condensates {
+            Some(100 + rng.gen_range(-30..30))
+        } else {
+            None
+        };
+
         Self {
             particle_type,
             // color,
             updated: false,
             moved,
             moving_right,
+            condensation_countdown,
+            initial_condensation_countdown: condensation_countdown,
         }
     }
 
@@ -126,10 +129,42 @@ impl Particle {
     }
 
     fn update(&mut self, mut api: WorldApi) {
-        self.updated = true;
-        if self.particle_type.properties().moves {
-            self.movement(&mut api);
+        let mut deleted = false;
+
+        match self.particle_type {
+            ParticleType::Sand => {
+                self.movement(&mut api);
+            }
+            ParticleType::Water => {
+                self.movement(&mut api);
+            }
+            ParticleType::Steam => {
+                let lasty = api.xy.1;
+                self.movement(&mut api);
+                deleted = self.update_condensation(&mut api, lasty);
+            }
+            _ => {}
         }
+
+        if !deleted {
+            self.updated = true;
+            api.update_in_world(self.to_owned());
+        }
+    }
+
+    fn update_condensation(&mut self, api: &mut WorldApi, lasty: usize) -> bool {
+        if api.xy.1 == lasty {
+            if let Some(count) = self.condensation_countdown.as_mut() {
+                *count -= 1;
+                if *count <= 0 {
+                    api.replace_with_new((0, 0), ParticleType::Water);
+                    return true;
+                }
+            }
+        } else {
+            self.condensation_countdown = self.initial_condensation_countdown.clone();
+        }
+        false
     }
 }
 
@@ -154,7 +189,8 @@ impl Particle {
 
         for dxdy in check_directions.into_iter() {
             if self.check_movement_direction(dxdy, api) {
-                api.swap_with(dxdy, self.to_owned());
+                // api.swap_with(dxdy, self.to_owned());
+                api.swap_with(dxdy);
                 return;
             }
         }
@@ -182,7 +218,8 @@ impl Particle {
                 } else if dxdy == last_dir {
                     self.moving_right = Some(!self.moving_right.unwrap());
                 }
-                api.swap_with(dxdy_new, self.to_owned());
+                // api.swap_with(dxdy_new, self.to_owned());
+                api.swap_with(dxdy_new);
                 return;
             }
         }
@@ -199,14 +236,21 @@ impl Particle {
         let mut other_p = api.neighbour_mut(dxdy);
 
         // If the other position is empty, move into it
-        // if other_p.particle_type == ParticleType::Empty {
-        //     // This particle will move
-        //     self.moved = Some(true);
-        //     return true;
-        // } else
-        if other_p.particle_type == ParticleType::Empty
-            || other_p.particle_type.properties().moves && !other_p.moved.unwrap()
-        {
+        if other_p.particle_type == ParticleType::Empty {
+            if dxdy.1 != 0 {
+                let my_weight = self.particle_type.properties().weight;
+                let other_weight = other_p.particle_type.properties().weight;
+                if (!self.rises() && (my_weight * rand_factor > other_weight))
+                    || (self.rises() && (other_weight * rand_factor > my_weight))
+                {
+                    self.moved = Some(true);
+                    return true;
+                }
+            } else {
+                self.moved = Some(true);
+                return true;
+            }
+        } else if other_p.particle_type.properties().moves && !other_p.moved.unwrap() {
             // If there's something there and it's moveable and it hasn't
             // already moved, then we might swap with it
             let my_weight = self.particle_type.properties().weight;
@@ -214,9 +258,7 @@ impl Particle {
             if (!self.rises() && (my_weight * rand_factor > other_weight))
                 || (self.rises() && (other_weight * rand_factor > my_weight))
             {
-                if other_p.particle_type != ParticleType::Empty {
-                    other_p.moved = Some(true);
-                }
+                other_p.moved = Some(true);
                 self.moved = Some(true);
                 return true;
             }
@@ -358,12 +400,22 @@ impl<'a> WorldApi<'a> {
 
     /// Swaps the particle with the one dxdy away.
     /// Do not attempt to mutate the particle after calling this.
-    fn swap_with(&mut self, dxdy: (isize, isize), particle: Particle) {
+    // fn swap_with(&mut self, dxdy: (isize, isize), particle: Particle) {
+    fn swap_with(&mut self, dxdy: (isize, isize)) {
         let other_xy = self.world.relative_xy(self.xy, dxdy);
         let other_p = self.world.particle_grid[other_xy].clone();
         self.world.particle_grid[self.xy] = other_p;
-        self.world.particle_grid[other_xy] = particle;
+        // self.world.particle_grid[other_xy] = particle;
         self.xy = other_xy;
+    }
+
+    fn replace_with_new(&mut self, dxdy: (isize, isize), particle_type: ParticleType) {
+        let xy = self.world.relative_xy(self.xy, dxdy);
+        self.world.add_new_particle(particle_type, xy, true);
+    }
+
+    fn update_in_world(&mut self, particle: Particle) {
+        self.world.particle_grid[self.xy] = particle;
     }
 }
 
