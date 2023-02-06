@@ -188,10 +188,8 @@ impl Particle {
         let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
 
         for dxdy in check_directions.into_iter() {
-            if self.check_movement_direction(dxdy, api) {
-                // api.swap_with(dxdy, self.to_owned());
-                api.swap_with(dxdy);
-                return;
+            if self.try_moving_to(dxdy, api) {
+                break;
             }
         }
     }
@@ -203,24 +201,28 @@ impl Particle {
             ([(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)], (1, 0))
         };
 
+        let mut last_dxdy = (0, 0);
+
         for dxdy in check_directions.into_iter() {
             let dxdy_new = if self.rises() {
                 (dxdy.0, -dxdy.1)
             } else {
                 dxdy
             };
-            if self.check_movement_direction(dxdy_new, api) {
-                if dxdy == (-1, 1) {
-                    self.moving_right = Some(false)
-                }
-                if dxdy == (1, 1) {
-                    self.moving_right = Some(true)
-                } else if dxdy == last_dir {
-                    self.moving_right = Some(!self.moving_right.unwrap());
-                }
-                // api.swap_with(dxdy_new, self.to_owned());
-                api.swap_with(dxdy_new);
-                return;
+            if self.try_moving_to(dxdy_new, api) {
+                last_dxdy = dxdy;
+                break;
+            }
+        }
+
+        if self.moved.unwrap() {
+            if last_dxdy == (-1, 1) {
+                self.moving_right = Some(false)
+            }
+            if last_dxdy == (1, 1) {
+                self.moving_right = Some(true)
+            } else if last_dxdy == last_dir {
+                self.moving_right = Some(!self.moving_right.unwrap());
             }
         }
     }
@@ -231,35 +233,32 @@ impl Particle {
 
     /// Checks if this particle can and will move in the given direction.
     /// Assumes that if it can move there it will (sets self.moved to true)
-    fn check_movement_direction(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> bool {
+    fn try_moving_to(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> bool {
         let rand_factor = api.random::<f32>();
         let mut other_p = api.neighbour_mut(dxdy);
+        let my_weight = self.particle_type.properties().weight;
+        let other_weight = other_p.particle_type.properties().weight;
 
-        // If the other position is empty, move into it
-        if other_p.particle_type == ParticleType::Empty {
-            if dxdy.1 != 0 {
-                let my_weight = self.particle_type.properties().weight;
-                let other_weight = other_p.particle_type.properties().weight;
-                if (!self.rises() && (my_weight * rand_factor > other_weight))
-                    || (self.rises() && (other_weight * rand_factor > my_weight))
-                {
-                    self.moved = Some(true);
-                    return true;
-                }
-            } else {
+        let weight_check = (!self.rises() && (my_weight * rand_factor > other_weight))
+            || (self.rises() && (other_weight * rand_factor > my_weight));
+
+        let other_empty = other_p.particle_type == ParticleType::Empty;
+
+        // If the other position is empty, try moving into it
+        if other_empty {
+            // If we're moving sideways don't compare weights, just do it
+            if dxdy.1 == 0 || weight_check {
                 self.moved = Some(true);
+                api.swap_with(dxdy);
                 return true;
             }
         } else if other_p.particle_type.properties().moves && !other_p.moved.unwrap() {
             // If there's something there and it's moveable and it hasn't
             // already moved, then we might swap with it
-            let my_weight = self.particle_type.properties().weight;
-            let other_weight = other_p.particle_type.properties().weight;
-            if (!self.rises() && (my_weight * rand_factor > other_weight))
-                || (self.rises() && (other_weight * rand_factor > my_weight))
-            {
+            if weight_check {
                 other_p.moved = Some(true);
                 self.moved = Some(true);
+                api.swap_with(dxdy);
                 return true;
             }
         }
