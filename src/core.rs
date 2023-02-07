@@ -189,43 +189,7 @@ impl Particle {
                 deleted = self.update_condensation(&mut api, lasty);
             }
             ParticleType::Fungus => {
-                let dxdy_list = vec![
-                    (0, -1),
-                    (0, 1),
-                    (1, 0),
-                    (-1, 0),
-                    (-1, -1),
-                    (1, 1),
-                    (1, -1),
-                    (-1, 1),
-                ];
-
-                let dxdy = dxdy_list[api.random_range(0..dxdy_list.len())];
-                let neighbour = api.neighbour_mut(dxdy);
-                if self.watered.unwrap() {
-                    if neighbour.particle_type == ParticleType::Empty {
-                        let mut count = 0;
-                        for (ddx, ddy) in dxdy_list {
-                            let dxdy2 = (dxdy.0 + ddx, dxdy.1 + ddy);
-                            if api.neighbour(dxdy2).particle_type == ParticleType::Fungus {
-                                count += 1;
-                            }
-                        }
-
-                        if count < 3 && api.random() {
-                            api.replace_with_new(dxdy, ParticleType::Fungus);
-                            self.set_watered(false);
-                        }
-                    } else if neighbour.particle_type == ParticleType::Fungus {
-                        if !neighbour.watered.unwrap() {
-                            neighbour.set_watered(true);
-                            self.set_watered(false);
-                        }
-                    }
-                } else if neighbour.particle_type == ParticleType::Water {
-                    api.replace_with_new(dxdy, ParticleType::Empty);
-                    self.set_watered(true);
-                }
+                self.grow_fungus(&mut api);
             }
             _ => {}
         }
@@ -255,6 +219,46 @@ impl Particle {
             self.color = self.original_color;
         }
         self.watered = Some(w);
+    }
+
+    fn grow_fungus(&mut self, api: &mut WorldApi) {
+        let dxdy_list = vec![
+            (0, -1),
+            (0, 1),
+            (1, 0),
+            (-1, 0),
+            (-1, -1),
+            (1, 1),
+            (1, -1),
+            (-1, 1),
+        ];
+
+        let dxdy = dxdy_list[api.random_range(0..dxdy_list.len())];
+        let neighbour = api.neighbour_mut(dxdy);
+        if self.watered.unwrap() {
+            if neighbour.particle_type == ParticleType::Empty {
+                let mut count = 0;
+                for (ddx, ddy) in dxdy_list {
+                    let dxdy2 = (dxdy.0 + ddx, dxdy.1 + ddy);
+                    if api.neighbour(dxdy2).particle_type == ParticleType::Fungus {
+                        count += 1;
+                    }
+                }
+
+                if count < 3 && api.random() {
+                    api.replace_with_new(dxdy, ParticleType::Fungus);
+                    self.set_watered(false);
+                }
+            } else if neighbour.particle_type == ParticleType::Fungus {
+                if !neighbour.watered.unwrap() {
+                    neighbour.set_watered(true);
+                    self.set_watered(false);
+                }
+            }
+        } else if neighbour.particle_type == ParticleType::Water {
+            api.replace_with_new(dxdy, ParticleType::Empty);
+            self.set_watered(true);
+        }
     }
 }
 
