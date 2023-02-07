@@ -137,12 +137,16 @@ impl Particle {
             None
         };
 
-        let color = scale_hsl_of_color(
-            particle_type.properties().base_color,
-            1.0,
-            rng.gen_range(0.95..1.05),
-            rng.gen_range(0.98..1.02),
-        );
+        let color = if particle_type == ParticleType::Empty {
+            particle_type.properties().base_color
+        } else {
+            scale_hsl_of_color(
+                particle_type.properties().base_color,
+                1.0,
+                rng.gen_range(0.95..1.05),
+                rng.gen_range(0.98..1.02),
+            )
+        };
 
         Self {
             particle_type,
