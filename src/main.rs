@@ -4,9 +4,11 @@ use macroquad::{
     color::{hsl_to_rgb, rgb_to_hsl},
     prelude::*,
 };
+use particle::*;
 use std::iter::Cycle;
 
 mod core;
+mod particle;
 
 const GRID_WIDTH_: usize = 50;
 const GRID_HEIGHT_: usize = 50;
