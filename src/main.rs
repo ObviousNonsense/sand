@@ -566,21 +566,11 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                             ParticleType::Sand,
                             "Sand",
                         );
-                        // ui.selectable_value(
-                        //     &mut settings.placement_type,
-                        //     ParticleType::HeavySand,
-                        //     "Black Sand",
-                        // );
                         ui.selectable_value(
                             &mut settings.placement_type,
                             ParticleType::Water,
                             "Water",
                         );
-                        // ui.selectable_value(
-                        //     &mut settings.placement_type,
-                        //     ParticleType::HeavyWater,
-                        //     "Purple Water",
-                        // );
                         ui.selectable_value(
                             &mut settings.placement_type,
                             ParticleType::Concrete,
@@ -590,6 +580,11 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                             &mut settings.placement_type,
                             ParticleType::Steam,
                             "Steam",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Fungus,
+                            "Fungus",
                         );
                     }
                     ui.allocate_space(ui.available_size());

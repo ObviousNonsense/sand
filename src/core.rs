@@ -1,5 +1,14 @@
 use super::*;
-use ::rand::{prelude::Distribution, rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
+use ::rand::{
+    distributions::{
+        uniform::{SampleRange, SampleUniform},
+        Slice,
+    },
+    prelude::Distribution,
+    rngs::ThreadRng,
+    seq::SliceRandom,
+    thread_rng, Rng,
+};
 use array2d::Array2D;
 
 // #[derive(Debug, PartialEq)]
@@ -17,6 +26,7 @@ pub enum ParticleType {
     Water,
     Concrete,
     Steam,
+    Fungus,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -74,20 +84,44 @@ impl ParticleType {
                 fluid: true,
                 condensates: true,
             },
+            ParticleType::Fungus => ParticleTypeProperties {
+                base_color: Color::new(0.41, 0.58, 0.51, 1.0),
+                weight: f32::INFINITY,
+                moves: false,
+                fluid: false,
+                condensates: false,
+            },
         }
     }
+}
+
+fn scale_hsl_of_color(c: Color, scale_h: f32, scale_s: f32, scale_l: f32) -> Color {
+    let color_hsl = rgb_to_hsl(c);
+    hsl_to_rgb(
+        color_hsl.0 * scale_h,
+        color_hsl.1 * scale_s,
+        color_hsl.2 * scale_l,
+    )
+}
+
+#[derive(PartialEq)]
+enum Deleted {
+    True,
+    False,
 }
 
 // #[derive(Debug)]
 #[derive(Debug, Clone)]
 pub struct Particle {
     pub particle_type: ParticleType,
-    // pub color: Color,
+    pub color: Color,
+    original_color: Color,
     updated: bool,
     moved: Option<bool>,
     moving_right: Option<bool>,
     condensation_countdown: Option<i16>,
     initial_condensation_countdown: Option<i16>,
+    watered: Option<bool>,
 }
 
 // General Particle Methods
@@ -113,23 +147,34 @@ impl Particle {
             None
         };
 
+        let watered = if particle_type == ParticleType::Fungus {
+            Some(false)
+        } else {
+            None
+        };
+
+        let color = scale_hsl_of_color(
+            particle_type.properties().base_color,
+            1.0,
+            rng.gen_range(0.95..1.05),
+            rng.gen_range(0.98..1.02),
+        );
+
         Self {
             particle_type,
-            // color,
+            color,
+            original_color: color,
             updated: false,
             moved,
             moving_right,
             condensation_countdown,
             initial_condensation_countdown: condensation_countdown,
+            watered,
         }
     }
 
-    fn draw(&self, x: usize, y: usize) {
-        draw_particle(x, y, self.particle_type.properties().base_color);
-    }
-
     fn update(&mut self, mut api: WorldApi) {
-        let mut deleted = false;
+        let mut deleted = Deleted::False;
 
         match self.particle_type {
             ParticleType::Sand => {
@@ -143,28 +188,91 @@ impl Particle {
                 self.movement(&mut api);
                 deleted = self.update_condensation(&mut api, lasty);
             }
+            ParticleType::Fungus => {
+                let dxdy_list = vec![
+                    (0, -1),
+                    (0, 1),
+                    (1, 0),
+                    (-1, 0),
+                    (-1, -1),
+                    (1, 1),
+                    (1, -1),
+                    (-1, 1),
+                ];
+
+                let dxdy = dxdy_list[api.random_range(0..dxdy_list.len())];
+                let neighbour = api.neighbour_mut(dxdy);
+                if self.watered.unwrap() {
+                    if neighbour.particle_type == ParticleType::Empty {
+                        let mut count = 0;
+                        for (ddx, ddy) in dxdy_list {
+                            let dxdy2 = (dxdy.0 + ddx, dxdy.1 + ddy);
+                            if api.neighbour(dxdy2).particle_type == ParticleType::Fungus {
+                                count += 1;
+                            }
+                        }
+
+                        if count < 3 && api.random() {
+                            api.replace_with_new(dxdy, ParticleType::Fungus);
+                            self.set_watered(false);
+                        }
+                    } else if neighbour.particle_type == ParticleType::Fungus {
+                        if !neighbour.watered.unwrap() {
+                            neighbour.set_watered(true);
+                            self.set_watered(false);
+                        }
+                    }
+                } else if neighbour.particle_type == ParticleType::Water {
+                    api.replace_with_new(dxdy, ParticleType::Empty);
+                    self.set_watered(true);
+                }
+            }
             _ => {}
         }
 
-        if !deleted {
+        if deleted == Deleted::False {
             self.updated = true;
             api.update_in_world(self.to_owned());
         }
     }
 
-    fn update_condensation(&mut self, api: &mut WorldApi, lasty: usize) -> bool {
+    fn draw(&self, x: usize, y: usize) {
+        draw_particle(x, y, self.color);
+    }
+}
+
+pub fn draw_particle(x: usize, y: usize, color: Color) {
+    let (px, py) = xy_to_pixels(x, y);
+    draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
+}
+
+/// Fungus (plant?) methods
+impl Particle {
+    fn set_watered(&mut self, w: bool) {
+        if w {
+            self.color = scale_hsl_of_color(self.original_color, 1.1, 1.7, 1.0);
+        } else {
+            self.color = self.original_color;
+        }
+        self.watered = Some(w);
+    }
+}
+
+/// Condensation methods
+impl Particle {
+    fn update_condensation(&mut self, api: &mut WorldApi, lasty: usize) -> Deleted {
         if api.xy.1 == lasty {
             if let Some(count) = self.condensation_countdown.as_mut() {
                 *count -= 1;
                 if *count <= 0 {
                     api.replace_with_new((0, 0), ParticleType::Water);
-                    return true;
+                    return Deleted::True;
                 }
             }
         } else {
             self.condensation_countdown = self.initial_condensation_countdown.clone();
         }
-        false
+        Deleted::False
     }
 }
 
@@ -272,11 +380,6 @@ impl Particle {
             unreachable!("Called set_moved on non-movable particle {:?}", self);
         }
     }
-}
-
-pub fn draw_particle(x: usize, y: usize, color: Color) {
-    let (px, py) = xy_to_pixels(x, y);
-    draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
 }
 
 /* #region  */
@@ -389,9 +492,17 @@ impl<'a> WorldApi<'a> {
         self.world.rng.gen::<T>()
     }
 
-    // fn neighbour(&self, dxdy: (isize, isize)) -> &Particle {
-    //     self.world.relative_particle(self.xy, dxdy)
-    // }
+    fn random_range<T, R>(&mut self, slice: R) -> T
+    where
+        T: ::rand::distributions::uniform::SampleUniform,
+        R: SampleRange<T>,
+    {
+        self.world.rng.gen_range::<T, R>(slice)
+    }
+
+    fn neighbour(&self, dxdy: (isize, isize)) -> &Particle {
+        self.world.relative_particle(self.xy, dxdy)
+    }
 
     fn neighbour_mut(&mut self, dxdy: (isize, isize)) -> &mut Particle {
         self.world.relative_particle_mut(self.xy, dxdy)
@@ -612,9 +723,9 @@ impl World {
         (i % self.width, i / self.width)
     }
 
-    // fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
-    //     &self.particle_grid[self.relative_xy(xy, dxdy)]
-    // }
+    fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
+        &self.particle_grid[self.relative_xy(xy, dxdy)]
+    }
 
     fn relative_particle_mut(&mut self, xy: (usize, usize), dxdy: (isize, isize)) -> &mut Particle {
         let (new_x, new_y) = self.relative_xy(xy, dxdy);
