@@ -245,7 +245,8 @@ impl Particle {
                     }
                 }
 
-                if count < 3 && api.random() {
+                if api.random_range(0..4) > count {
+                    // if count < 3 && api.random() {
                     api.replace_with_new(dxdy, ParticleType::Fungus);
                     self.set_watered(false);
                 }
