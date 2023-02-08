@@ -246,11 +246,10 @@ impl Particle {
                     api.replace_with_new(dxdy, ParticleType::Fungus);
                     self.set_watered(false);
                 }
-            } else if neighbour.particle_type == ParticleType::Fungus {
-                if !neighbour.watered.unwrap() {
-                    neighbour.set_watered(true);
-                    self.set_watered(false);
-                }
+            } else if neighbour.particle_type == ParticleType::Fungus && !neighbour.watered.unwrap()
+            {
+                neighbour.set_watered(true);
+                self.set_watered(false);
             }
         } else if neighbour.particle_type == ParticleType::Water {
             api.replace_with_new(dxdy, ParticleType::Empty);
@@ -271,7 +270,7 @@ impl Particle {
                 }
             }
         } else {
-            self.condensation_countdown = self.initial_condensation_countdown.clone();
+            self.condensation_countdown = self.initial_condensation_countdown;
         }
         Deleted::False
     }
