@@ -1,4 +1,3 @@
-use crate::core::*;
 use egui_macroquad::{egui::ComboBox, *};
 use macroquad::{
     color::{hsl_to_rgb, rgb_to_hsl},
@@ -6,9 +5,10 @@ use macroquad::{
 };
 use particle::*;
 use std::iter::Cycle;
+use world::*;
 
-mod core;
 mod particle;
+mod world;
 
 const GRID_WIDTH_: usize = 50;
 const GRID_HEIGHT_: usize = 50;
