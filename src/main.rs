@@ -10,9 +10,9 @@ use world::*;
 mod particle;
 mod world;
 
-const GRID_WIDTH_: usize = 50;
-const GRID_HEIGHT_: usize = 50;
-const PIXELS_PER_PARTICLE: f32 = 16.0;
+const GRID_WIDTH_: usize = 100;
+const GRID_HEIGHT_: usize = 100;
+const PIXELS_PER_PARTICLE: f32 = 12.0;
 const WORLD_PX0: f32 = 400.0;
 const WORLD_PY0: f32 = 0.0;
 
@@ -50,9 +50,16 @@ struct Settings {
     portal_color_cycle: Cycle<std::vec::IntoIter<Color>>,
 }
 
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────── ✣ ─
 #[macroquad::main(window_conf)]
 async fn main() {
+    #[cfg(feature = "dhat-heap")]
+    let _profiler = dhat::Profiler::new_heap();
+
     // color_eyre::install()?;
 
     // Something wrong with this on Mac for some reason. But also without it the
@@ -132,6 +139,11 @@ async fn main() {
             // ─────────────────────────────────────────────────────────────
         }
         egui_macroquad::draw();
+
+        if is_key_pressed(KeyCode::Escape) {
+            break;
+        }
+
         next_frame().await
     }
     // Ok(())
