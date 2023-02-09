@@ -196,14 +196,23 @@ impl Particle {
         }
     }
 
-    pub fn draw(&self, x: usize, y: usize) {
-        draw_particle(x, y, self.color);
+    pub fn draw(&self, x: usize, y: usize, image: &mut Image) {
+        draw_particle(x, y, self.color, image);
     }
 }
 
-pub fn draw_particle(x: usize, y: usize, color: Color) {
-    let (px, py) = xy_to_pixels(x, y);
-    draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
+pub fn draw_particle(x: usize, y: usize, color: Color, image: &mut Image) {
+    let (px0, py0) = (
+        x as f32 * PIXELS_PER_PARTICLE,
+        y as f32 * PIXELS_PER_PARTICLE,
+    );
+    // draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
+
+    for x in (px0 as u32)..((px0 + PIXELS_PER_PARTICLE) as u32) {
+        for y in (py0 as u32)..((py0 + PIXELS_PER_PARTICLE) as u32) {
+            image.set_pixel(x, y, color);
+        }
+    }
 }
 
 /// Fungus (plant?) methods

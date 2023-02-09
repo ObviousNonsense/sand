@@ -93,17 +93,28 @@ async fn main() {
         portal_color_cycle: color_cycle,
     };
 
+    let mut image = Image::gen_image_color(
+        (WORLD_PX0 + GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE) as u16,
+        (WORLD_PY0 + GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE) as u16,
+        WHITE,
+    );
+
+    let texture = Texture2D::from_image(&image);
+
     loop {
         egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut world, fps));
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
         // clear_background(BLACK);
-        world.draw_and_reset_all_particles();
+        world.draw_and_reset_all_particles(&mut image);
         // ─────────────────────────────────────────────────────────────────────────
 
         // ─── Input ───────────────────────────────────────────────────────────────
-        handle_input(&mut settings, &mut world);
+        handle_input(&mut settings, &mut world, &mut image);
         // ─────────────────────────────────────────────────────────────────────────
+
+        texture.update(&image);
+        draw_texture(texture, WORLD_PX0, WORLD_PY0, WHITE);
 
         let time = get_time();
         let frame_time = time - tic;
@@ -153,7 +164,7 @@ fn xy_to_pixels(x: usize, y: usize) -> (f32, f32) {
 }
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
-fn handle_input(settings: &mut Settings, world: &mut World) {
+fn handle_input(settings: &mut Settings, world: &mut World, image: &mut Image) {
     // Change particle placement type with number keys
     if is_key_pressed(KeyCode::Key1) {
         settings.placement_type = ParticleType::Sand;
@@ -212,7 +223,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 }
 
                 // Highlight brush
-                highlight_brush(settings, x, y, mousex, mousey);
+                highlight_brush(settings, x, y, mousex, mousey, image);
 
                 // Add particles on left click
                 if is_mouse_button_down(MouseButton::Left) {
@@ -229,7 +240,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
 
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
-        world.draw_and_reset_all_particles();
+        world.draw_and_reset_all_particles(image);
         world.update_all();
     }
     // Pause/Unpause with space
@@ -259,12 +270,19 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
     }
 }
 
-fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mousey: usize) {
+fn highlight_brush(
+    settings: &Settings,
+    x: usize,
+    y: usize,
+    mousex: usize,
+    mousey: usize,
+    image: &mut Image,
+) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
             let mut color = settings.placement_type.properties().base_color;
             color.a = 0.4;
-            draw_particle(x, y, color);
+            draw_particle(x, y, color, image);
         }
         PlaceableSelector::Source => {
             let mut color = settings.placement_type.properties().base_color;

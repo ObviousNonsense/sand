@@ -325,7 +325,7 @@ impl World {
     }
 
     // ─── Other ───────────────────────────────────────────────────────────────────────────
-    pub fn draw_and_reset_all_particles(&mut self) {
+    pub fn draw_and_reset_all_particles(&mut self, image: &mut Image) {
         for x in 0..self.width {
             for y in 0..self.height {
                 let ptype = self.particle_grid[(x, y)].particle_type;
@@ -334,7 +334,7 @@ impl World {
                     self.particle_grid[(x, y)].set_moved(false);
                 }
 
-                self.particle_grid[(x, y)].draw(x, y);
+                self.particle_grid[(x, y)].draw(x, y, image);
                 if let Some(portal) = &self.portal_grid[(x, y)] {
                     portal.draw(x, y);
                 }
