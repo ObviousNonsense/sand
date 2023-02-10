@@ -12,6 +12,10 @@ pub enum ParticleType {
     Steam,
     Fungus,
     Flame,
+    Methane,
+    Gunpowder,
+    Oil,
+    Wood,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -100,7 +104,43 @@ impl ParticleType {
                 fluid: false,
                 condensates: false,
                 flammability: 0.0,
-                base_fuel: Some(1),
+                base_fuel: Some(0),
+            },
+            ParticleType::Methane => ParticleTypeProperties {
+                base_color: Color::new(0.58, 0.47, 0.66, 1.0),
+                weight: 0.2,
+                moves: true,
+                fluid: true,
+                condensates: false,
+                flammability: 0.95,
+                base_fuel: Some(6),
+            },
+            ParticleType::Gunpowder => ParticleTypeProperties {
+                base_color: BLACK,
+                weight: 90.0,
+                moves: true,
+                fluid: false,
+                condensates: false,
+                flammability: 0.7,
+                base_fuel: Some(25),
+            },
+            ParticleType::Oil => ParticleTypeProperties {
+                base_color: Color::new(0.44, 0.34, 0.18, 1.0),
+                weight: 50.0,
+                moves: true,
+                fluid: true,
+                condensates: false,
+                flammability: 0.95,
+                base_fuel: Some(15),
+            },
+            ParticleType::Wood => ParticleTypeProperties {
+                base_color: Color::new(0.3, 0.22, 0.17, 1.0),
+                weight: f32::INFINITY,
+                moves: false,
+                fluid: false,
+                condensates: false,
+                flammability: 0.1,
+                base_fuel: Some(200),
             },
         }
     }
@@ -205,13 +245,11 @@ impl Particle {
     pub fn update(&mut self, mut api: WorldApi) {
         let mut deleted = Deleted::False;
 
+        if self.particle_type.properties().moves && !self.particle_type.properties().condensates {
+            self.movement(&mut api);
+        }
+
         match self.particle_type {
-            ParticleType::Sand => {
-                self.movement(&mut api);
-            }
-            ParticleType::Water => {
-                self.movement(&mut api);
-            }
             ParticleType::Steam => {
                 let lasty = api.xy().1;
                 self.movement(&mut api);

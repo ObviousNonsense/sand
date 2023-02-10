@@ -10,10 +10,10 @@ use world::*;
 mod particle;
 mod world;
 
-const GRID_WIDTH_: usize = 50;
-const GRID_HEIGHT_: usize = 50;
-const PIXELS_PER_PARTICLE: f32 = 16.0;
-const WORLD_PX0: f32 = 400.0;
+const GRID_WIDTH_: usize = 250;
+const GRID_HEIGHT_: usize = 250;
+const PIXELS_PER_PARTICLE: f32 = 4.0;
+const WORLD_PX0: f32 = 200.0;
 const WORLD_PY0: f32 = 0.0;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
@@ -523,8 +523,29 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
             ui.group(|ui| {
                 ui.toggle_value(&mut settings.delete, "Delete");
             });
+            ui.horizontal(|ui| {
+                ui.group(|ui| {
+                    ui.label("Brush Size: ");
+                    ui.add(
+                        egui::DragValue::new(&mut settings.brush_size)
+                            .clamp_range(1.0..=30.0)
+                            .fixed_decimals(0)
+                            .speed(0.2),
+                    );
+                    if ui.button("➕").clicked() {
+                        settings.brush_size += 1.0;
+                    }
+                    if ui.button("➖").clicked() {
+                        settings.brush_size -= 1.0;
+                    }
+                });
+                ui.group(|ui| {
+                    ui.checkbox(&mut settings.replace, "Replace");
+                });
+                ui.allocate_space(ui.available_size());
+            });
             ui.group(|ui| {
-                ui.horizontal(|ui| {
+                ui.vertical(|ui| {
                     // ui.style_mut().visuals.
                     // let mut job = egui::text::LayoutJob::default();
                     // job.append(
@@ -583,6 +604,11 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         );
                         ui.selectable_value(
                             &mut settings.placement_type,
+                            ParticleType::Wood,
+                            "Wood",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
                             ParticleType::Steam,
                             "Steam",
                         );
@@ -596,30 +622,25 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                             ParticleType::Flame,
                             "Flame",
                         );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Methane,
+                            "Methane",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Gunpowder,
+                            "Gunpowder",
+                        );
+                        #[rustfmt::skip]
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Oil,
+                            "Oil"
+                        );
                     }
                     ui.allocate_space(ui.available_size());
                 });
-            });
-            ui.horizontal(|ui| {
-                ui.group(|ui| {
-                    ui.label("Brush Size: ");
-                    ui.add(
-                        egui::DragValue::new(&mut settings.brush_size)
-                            .clamp_range(1.0..=30.0)
-                            .fixed_decimals(0)
-                            .speed(0.2),
-                    );
-                    if ui.button("➕").clicked() {
-                        settings.brush_size += 1.0;
-                    }
-                    if ui.button("➖").clicked() {
-                        settings.brush_size -= 1.0;
-                    }
-                });
-                ui.group(|ui| {
-                    ui.checkbox(&mut settings.replace, "Replace");
-                });
-                ui.allocate_space(ui.available_size());
             });
             if settings.debug_mode {
                 ui.group(|ui| {
