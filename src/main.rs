@@ -560,6 +560,9 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         ui.label("Sand");
                         ui.label("Water");
                         ui.label("Concrete");
+                        ui.label("Steam");
+                        ui.label("Fungus");
+                        ui.label("Flame");
                     } else {
                         // ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::GOLD;
                         // ui.visuals_mut().widgets.noninteractive.bg_fill = egui::Color32::GOLD;
@@ -587,6 +590,11 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                             &mut settings.placement_type,
                             ParticleType::Fungus,
                             "Fungus",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Flame,
+                            "Flame",
                         );
                     }
                     ui.allocate_space(ui.available_size());

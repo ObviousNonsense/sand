@@ -11,6 +11,7 @@ pub enum ParticleType {
     Concrete,
     Steam,
     Fungus,
+    Flame,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -21,6 +22,8 @@ pub struct ParticleTypeProperties {
     pub moves: bool,
     pub fluid: bool,
     pub condensates: bool,
+    pub flammability: f32,
+    pub base_fuel: Option<i16>,
 }
 
 impl ParticleType {
@@ -32,6 +35,8 @@ impl ParticleType {
                 moves: false,
                 fluid: false,
                 condensates: false,
+                flammability: 0.0,
+                base_fuel: None,
             },
             ParticleType::Concrete => ParticleTypeProperties {
                 base_color: GRAY,
@@ -39,6 +44,8 @@ impl ParticleType {
                 moves: false,
                 fluid: false,
                 condensates: false,
+                flammability: 0.0,
+                base_fuel: None,
             },
             ParticleType::Empty => ParticleTypeProperties {
                 base_color: Color::new(0.2, 0.2, 0.2, 1.0),
@@ -46,6 +53,8 @@ impl ParticleType {
                 moves: false,
                 fluid: false,
                 condensates: false,
+                flammability: 0.0,
+                base_fuel: None,
             },
             ParticleType::Sand => ParticleTypeProperties {
                 base_color: YELLOW,
@@ -53,6 +62,8 @@ impl ParticleType {
                 moves: true,
                 fluid: false,
                 condensates: false,
+                flammability: 0.0,
+                base_fuel: None,
             },
             ParticleType::Water => ParticleTypeProperties {
                 base_color: BLUE,
@@ -60,6 +71,8 @@ impl ParticleType {
                 moves: true,
                 fluid: true,
                 condensates: false,
+                flammability: 0.0,
+                base_fuel: None,
             },
             ParticleType::Steam => ParticleTypeProperties {
                 base_color: Color::new(0.753, 0.824, 0.949, 1.0),
@@ -67,13 +80,27 @@ impl ParticleType {
                 moves: true,
                 fluid: true,
                 condensates: true,
+                flammability: 0.0,
+                base_fuel: None,
             },
+            // TODO: Make two types: WateredFungus, Dry Fungus
             ParticleType::Fungus => ParticleTypeProperties {
                 base_color: Color::new(0.41, 0.58, 0.51, 1.0),
                 weight: f32::INFINITY,
                 moves: false,
                 fluid: false,
                 condensates: false,
+                flammability: 0.1,
+                base_fuel: Some(35),
+            },
+            ParticleType::Flame => ParticleTypeProperties {
+                base_color: Color::new(1.0, 0.47, 0.0, 1.0),
+                weight: f32::INFINITY,
+                moves: false,
+                fluid: false,
+                condensates: false,
+                flammability: 0.0,
+                base_fuel: Some(1),
             },
         }
     }
@@ -98,14 +125,17 @@ enum Deleted {
 #[derive(Debug, Clone)]
 pub struct Particle {
     pub particle_type: ParticleType,
+    pub updated: bool,
     pub color: Color,
     original_color: Color,
-    pub updated: bool,
+    burning: bool,
     moved: Option<bool>,
     moving_right: Option<bool>,
     condensation_countdown: Option<i16>,
     initial_condensation_countdown: Option<i16>,
     watered: Option<bool>,
+    fresh: Option<bool>,
+    fuel: Option<i16>,
 }
 
 // General Particle Methods
@@ -137,6 +167,14 @@ impl Particle {
             None
         };
 
+        let (burning, fresh) = if particle_type == ParticleType::Flame {
+            (true, Some(true))
+        } else {
+            (false, None)
+        };
+
+        let fuel = particle_type.properties().base_fuel;
+
         let color = if particle_type == ParticleType::Empty {
             particle_type.properties().base_color
         } else {
@@ -150,14 +188,17 @@ impl Particle {
 
         Self {
             particle_type,
+            updated: false,
             color,
             original_color: color,
-            updated: false,
+            burning,
             moved,
             moving_right,
             condensation_countdown,
             initial_condensation_countdown: condensation_countdown,
             watered,
+            fresh,
+            fuel,
         }
     }
 
@@ -179,7 +220,21 @@ impl Particle {
             ParticleType::Fungus => {
                 self.grow_fungus(&mut api);
             }
+            ParticleType::Flame => {
+                if self.fresh.unwrap() {
+                    self.fresh = Some(false);
+                };
+
+                if !self.burning {
+                    deleted = Deleted::True;
+                    api.replace_with_new((0, 0), ParticleType::Empty);
+                }
+            }
             _ => {}
+        }
+
+        if self.burning && deleted == Deleted::False {
+            deleted = self.burn(&mut api);
         }
 
         if deleted == Deleted::False {
@@ -204,6 +259,57 @@ impl Particle {
 pub fn draw_particle(x: usize, y: usize, color: Color) {
     let (px, py) = xy_to_pixels(x, y);
     draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
+}
+
+impl Particle {
+    fn set_burning(&mut self, b: bool) {
+        self.burning = b;
+    }
+
+    fn burn(&mut self, api: &mut WorldApi) -> Deleted {
+        self.color = Particle::burning_flicker_color(api);
+
+        let dxdy_list = vec![(0, -1), (1, 0), (-1, 0), (0, 1)];
+
+        for dxdy in dxdy_list.into_iter() {
+            let r = api.random();
+            let neighbour = api.neighbour_mut(dxdy);
+            let neighbour_flammability = neighbour.particle_type.properties().flammability;
+            if neighbour_flammability > 0.0 && !neighbour.burning {
+                if neighbour_flammability * (1.0 - 0.5 * dxdy.1 as f32) > r {
+                    neighbour.set_burning(true);
+                }
+            } else if neighbour.particle_type == ParticleType::Empty && self.fuel.unwrap() > 0 {
+                if dxdy.1 < 1 && api.neighbour((-1, 0)).burning && api.neighbour((1, 0)).burning {
+                    let mut new_flame = api.new_particle(ParticleType::Flame);
+                    new_flame.fuel = Some(api.random_range(0..self.fuel.unwrap()));
+                    api.replace_with(dxdy, new_flame);
+                }
+            } else if neighbour.particle_type == ParticleType::Water {
+                api.replace_with_new(dxdy, ParticleType::Steam);
+                self.burning = false;
+                break;
+            }
+        }
+
+        if let Some(fuel) = self.fuel.as_mut() {
+            *fuel -= 1;
+            if *fuel < 0 {
+                api.replace_with_new((0, 0), ParticleType::Empty);
+                return Deleted::True;
+            }
+        }
+        Deleted::False
+    }
+
+    fn burning_flicker_color(api: &mut WorldApi) -> Color {
+        scale_hsl_of_color(
+            ParticleType::Flame.properties().base_color,
+            api.random_range(0.95..1.05),
+            api.random_range(0.95..1.05),
+            api.random_range(0.95..1.05),
+        )
+    }
 }
 
 /// Fungus (plant?) methods

@@ -147,6 +147,15 @@ impl<'a> WorldApi<'a> {
         self.world.add_new_particle(particle_type, xy, true);
     }
 
+    pub fn new_particle(&mut self, particle_type: ParticleType) -> Particle {
+        Particle::new(particle_type, &mut self.world.rng)
+    }
+
+    pub fn replace_with(&mut self, dxdy: (isize, isize), particle: Particle) {
+        let xy = self.world.relative_xy(self.xy, dxdy);
+        self.world.particle_grid[xy] = particle;
+    }
+
     pub fn update_in_world(&mut self, particle: Particle) {
         self.world.particle_grid[self.xy] = particle;
     }
