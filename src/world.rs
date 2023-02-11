@@ -13,14 +13,14 @@ struct ParticleSource {
 }
 
 impl ParticleSource {
-    fn draw(&self, x: usize, y: usize) {
+    fn draw(&self, x: usize, y: usize, painter: &Painter) {
         let mut color = self.particle_type.properties().base_color;
         color.a = 0.5;
         color.r -= 0.1;
         color.g -= 0.1;
         color.b -= 0.1;
 
-        draw_source(
+        painter.draw_source(
             x,
             y,
             color,
@@ -28,28 +28,6 @@ impl ParticleSource {
             self.particle_type == ParticleType::Empty,
         );
     }
-}
-
-pub fn draw_source(x: usize, y: usize, color: Color, replaces: bool, sink: bool) {
-    let (px, py) = xy_to_pixels(x, y);
-    draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
-
-    // if !empty {
-    let hatch_color = if replaces || sink {
-        Color::new(0.0, 0.0, 0.0, 0.2)
-    } else {
-        Color::new(1.0, 1.0, 1.0, 0.5)
-    };
-
-    draw_line(
-        px,
-        py,
-        px + PIXELS_PER_PARTICLE,
-        py + PIXELS_PER_PARTICLE,
-        1.0,
-        hatch_color,
-    );
-    // }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -80,24 +58,9 @@ struct Portal {
 }
 
 impl Portal {
-    fn draw(&self, x: usize, y: usize) {
-        draw_portal(x, y, self.direction, self.color);
+    fn draw(&self, x: usize, y: usize, painter: &Painter) {
+        painter.draw_portal(x, y, self.direction, self.color);
     }
-}
-
-pub fn draw_portal(x: usize, y: usize, direction: Direction, color: Color) {
-    let (px, py) = xy_to_pixels(x, y);
-    // draw_line()
-    let pix_per = PIXELS_PER_PARTICLE;
-    let thickness = pix_per / 4.0;
-    let (ptx, pty, w, h): (f32, f32, f32, f32) = match direction {
-        Direction::Up => (px, py, pix_per, thickness),
-        Direction::Right => (px + pix_per - thickness, py, thickness, pix_per),
-        Direction::Down => (px, py + pix_per - thickness, pix_per, thickness),
-        Direction::Left => (px, py, thickness, pix_per),
-    };
-
-    draw_rectangle(ptx, pty, w, h, color);
 }
 
 /* #endregion */
@@ -333,21 +296,15 @@ impl World {
     }
 
     // ─── Other ───────────────────────────────────────────────────────────────────────────
-    pub fn draw_and_reset_all_particles(&mut self) {
+    pub fn draw_and_reset_all_particles(&mut self, painter: &Painter) {
         for x in 0..self.width {
             for y in 0..self.height {
-                let ptype = self.particle_grid[(x, y)].particle_type;
-                self.particle_grid[(x, y)].updated = false;
-                if ptype.properties().moves {
-                    self.particle_grid[(x, y)].set_moved(false);
-                }
-
-                self.particle_grid[(x, y)].draw(x, y);
+                self.particle_grid[(x, y)].draw_and_refresh(x, y, painter);
                 if let Some(portal) = &self.portal_grid[(x, y)] {
-                    portal.draw(x, y);
+                    portal.draw(x, y, painter);
                 }
                 if let Some(source) = &self.source_grid[(x, y)] {
-                    source.draw(x, y);
+                    source.draw(x, y, painter);
                 }
             }
         }

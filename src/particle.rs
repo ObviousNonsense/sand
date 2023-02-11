@@ -281,27 +281,42 @@ impl Particle {
         }
     }
 
-    pub fn set_moved(&mut self, val: bool) {
+    pub fn refresh(&mut self) {
+        self.updated = false;
         if self.particle_type.properties().moves {
-            self.moved = Some(val);
-        } else {
-            unreachable!("Called set_moved on non-movable particle {:?}", self);
+            self.moved = Some(false);
         }
     }
 
-    pub fn draw(&self, x: usize, y: usize) {
-        draw_particle(x, y, self.color);
+    // pub fn set_moved(&mut self, val: bool) {
+    //     if self.particle_type.properties().moves {
+    //         self.moved = Some(val);
+    //     } else {
+    //         unreachable!("Called set_moved on non-movable particle {:?}", self);
+    //     }
+    // }
+
+    pub fn draw(&self, x: usize, y: usize, painter: &Painter) {
+        painter.draw_particle(x, y, self.color);
+    }
+
+    pub fn draw_and_refresh(&mut self, x: usize, y: usize, painter: &Painter) {
+        self.refresh();
+        self.draw(x, y, painter);
     }
 }
 
-pub fn draw_particle(x: usize, y: usize, color: Color) {
-    let (px, py) = xy_to_pixels(x, y);
-    draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
-}
+// pub fn draw_particle(x: usize, y: usize, color: Color) {
+//     let (px, py) = xy_to_pixels(x, y);
+//     draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
+// }
 
 impl Particle {
     fn set_burning(&mut self, b: bool) {
         self.burning = b;
+        if !b {
+            self.color = self.original_color;
+        }
     }
 
     fn burn(&mut self, api: &mut WorldApi) -> Deleted {
@@ -325,7 +340,7 @@ impl Particle {
                 }
             } else if neighbour.particle_type == ParticleType::Water {
                 api.replace_with_new(dxdy, ParticleType::Steam);
-                self.burning = false;
+                self.set_burning(false);
                 break;
             }
         }
