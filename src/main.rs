@@ -10,12 +10,6 @@ use world::*;
 mod particle;
 mod world;
 
-const GRID_WIDTH_: usize = 250;
-const GRID_HEIGHT_: usize = 250;
-const PIXELS_PER_PARTICLE: f32 = 4.0;
-const WORLD_PX0: f32 = 200.0;
-const WORLD_PY0: f32 = 0.0;
-
 const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
 const LIMIT_UPDATE_RATE: bool = false;
@@ -26,73 +20,7 @@ fn window_conf() -> Conf {
         window_resizable: false,
         high_dpi: true,
         sample_count: 0,
-        // window_width: (WORLD_PX0 + GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE) as i32,
-        // window_height: (WORLD_PY0 + GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE) as i32,
         ..Default::default()
-    }
-}
-
-struct Settings {
-    paused: bool,
-    brush_size: f32,
-    display_fps: bool,
-    placeable_selector: PlaceableSelector,
-    sources_replace: bool,
-    placement_type: ParticleType,
-    delete: bool,
-    replace: bool,
-    debug_mode: bool,
-    portal_direction: Direction,
-    last_portal_placed: Vec<(usize, usize)>,
-    waiting_for_partner_portal: bool,
-    portal_color: Color,
-    portal_placement_valid: bool,
-    portal_color_cycle: Cycle<std::vec::IntoIter<Color>>,
-    painter: Painter,
-}
-
-pub struct Painter {}
-
-impl Painter {
-    fn draw_particle(&self, x: usize, y: usize, color: Color) {
-        let (px, py) = xy_to_pixels(x, y);
-        draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
-    }
-
-    fn draw_source(&self, x: usize, y: usize, color: Color, replaces: bool, sink: bool) {
-        let (px, py) = xy_to_pixels(x, y);
-        draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
-
-        // if !empty {
-        let hatch_color = if replaces || sink {
-            Color::new(0.0, 0.0, 0.0, 0.2)
-        } else {
-            Color::new(1.0, 1.0, 1.0, 0.5)
-        };
-
-        draw_line(
-            px,
-            py,
-            px + PIXELS_PER_PARTICLE,
-            py + PIXELS_PER_PARTICLE,
-            1.0,
-            hatch_color,
-        );
-    }
-
-    fn draw_portal(&self, x: usize, y: usize, direction: Direction, color: Color) {
-        let (px, py) = xy_to_pixels(x, y);
-        // draw_line()
-        let pix_per = PIXELS_PER_PARTICLE;
-        let thickness = pix_per / 4.0;
-        let (ptx, pty, w, h): (f32, f32, f32, f32) = match direction {
-            Direction::Up => (px, py, pix_per, thickness),
-            Direction::Right => (px + pix_per - thickness, py, thickness, pix_per),
-            Direction::Down => (px, py + pix_per - thickness, pix_per, thickness),
-            Direction::Left => (px, py, thickness, pix_per),
-        };
-
-        draw_rectangle(ptx, pty, w, h, color);
     }
 }
 
@@ -101,25 +29,15 @@ impl Painter {
 async fn main() {
     // color_eyre::install()?;
 
-    // Something wrong with this on Mac for some reason. But also without it the
-    // display is wrong on windows when the 4k monitor with 150% scaling is the
-    // primary monitor
-    request_new_screen_size(
-        WORLD_PX0 + GRID_WIDTH_ as f32 * PIXELS_PER_PARTICLE,
-        WORLD_PY0 + GRID_HEIGHT_ as f32 * PIXELS_PER_PARTICLE,
-    );
-
-    // Initialize Grid
-    let mut world = World::new(GRID_WIDTH_, GRID_HEIGHT_);
-
-    let mut tic = get_time();
-    let mut fps_counter = 0.0;
-    let mut frame_time_sum = 0.0;
-    let mut fps = 0.0;
-
     let mut color_cycle = vec![RED, LIME, VIOLET, PINK, ORANGE, GOLD, BEIGE, WHITE]
         .into_iter()
         .cycle();
+
+    let painter = Painter {
+        pixels_per_particle: 8.0,
+        world_px0: 225.0,
+        world_py0: 0.0,
+    };
 
     let mut settings = Settings {
         paused: false,
@@ -137,8 +55,17 @@ async fn main() {
         portal_color: color_cycle.next().unwrap(),
         portal_placement_valid: true,
         portal_color_cycle: color_cycle,
-        painter: Painter {},
+        new_pixels_per_particle: painter.pixels_per_particle,
+        new_size: (100, 100),
+        painter,
     };
+
+    let mut world = settings.resize_world_and_screen();
+
+    let mut tic = get_time();
+    let mut fps_counter = 0.0;
+    let mut frame_time_sum = 0.0;
+    let mut fps = 0.0;
 
     loop {
         egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut world, fps));
@@ -185,18 +112,146 @@ async fn main() {
 }
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 
-fn pixels_to_xy<T: From<f32>>(px: f32, py: f32) -> (T, T) {
-    (
-        ((px - WORLD_PX0) / PIXELS_PER_PARTICLE).into(),
-        ((py - WORLD_PY0) / PIXELS_PER_PARTICLE).into(),
-    )
+struct Settings {
+    paused: bool,
+    brush_size: f32,
+    display_fps: bool,
+    placeable_selector: PlaceableSelector,
+    sources_replace: bool,
+    placement_type: ParticleType,
+    delete: bool,
+    replace: bool,
+    debug_mode: bool,
+    portal_direction: Direction,
+    last_portal_placed: Vec<(usize, usize)>,
+    waiting_for_partner_portal: bool,
+    portal_color: Color,
+    portal_placement_valid: bool,
+    portal_color_cycle: Cycle<std::vec::IntoIter<Color>>,
+    new_pixels_per_particle: f32,
+    new_size: (usize, usize),
+    painter: Painter,
 }
 
-fn xy_to_pixels(x: usize, y: usize) -> (f32, f32) {
-    (
-        x as f32 * PIXELS_PER_PARTICLE + WORLD_PX0,
-        y as f32 * PIXELS_PER_PARTICLE + WORLD_PY0,
-    )
+impl Settings {
+    fn resize_world_and_screen(&mut self) -> World {
+        // Something wrong with this on Mac for some reason. But also without it the
+        // display is wrong on windows when the 4k monitor with 150% scaling is the
+        // primary monitor
+        request_new_screen_size(
+            self.painter.world_px0 + self.new_size.0 as f32 * self.painter.pixels_per_particle,
+            self.painter.world_py0 + self.new_size.1 as f32 * self.painter.pixels_per_particle,
+        );
+
+        self.last_portal_placed = vec![];
+        self.waiting_for_partner_portal = false;
+
+        self.painter.pixels_per_particle = self.new_pixels_per_particle;
+        World::new(self.new_size.0, self.new_size.1)
+    }
+}
+
+pub struct Painter {
+    world_px0: f32,
+    world_py0: f32,
+    pixels_per_particle: f32,
+}
+
+impl Painter {
+    fn pixels_to_xy<T: From<f32>>(&self, px: f32, py: f32) -> (T, T) {
+        (
+            ((px - self.world_px0) / self.pixels_per_particle).into(),
+            ((py - self.world_py0) / self.pixels_per_particle).into(),
+        )
+    }
+
+    fn xy_to_pixels(&self, x: usize, y: usize) -> (f32, f32) {
+        (
+            x as f32 * self.pixels_per_particle + self.world_px0,
+            y as f32 * self.pixels_per_particle + self.world_py0,
+        )
+    }
+
+    /// Function to calculate the coordinates of the placement brush
+    fn calculate_brush(
+        &self,
+        px: f32,
+        py: f32,
+        brush_size: f32,
+        grid_width: usize,
+        grid_height: usize,
+    ) -> (usize, usize, usize, usize) {
+        let (mousex, mousey) = self.pixels_to_xy::<f32>(px, py);
+        let brush_span = brush_size / 2.0;
+        let mousex_min = (mousex - brush_span).clamp(0., grid_width as f32) as usize;
+        let mousex_max = (mousex + brush_span).clamp(0., grid_width as f32) as usize;
+        let mousey_min = (mousey - brush_span).clamp(0., grid_height as f32) as usize;
+        let mousey_max = (mousey + brush_span).clamp(0., grid_height as f32) as usize;
+
+        (mousex_min, mousex_max, mousey_min, mousey_max)
+    }
+
+    fn mouse_location(&self, grid_width: usize, grid_height: usize) -> (usize, usize) {
+        let (px, py) = mouse_position();
+        let (mousex, mousey) = self.pixels_to_xy::<f32>(px, py);
+        (
+            mousex.clamp(0., grid_width as f32 - 1.0) as usize,
+            mousey.clamp(0., grid_height as f32 - 1.0) as usize,
+        )
+    }
+
+    fn draw_particle(&self, x: usize, y: usize, color: Color) {
+        let (px, py) = self.xy_to_pixels(x, y);
+        draw_rectangle(
+            px,
+            py,
+            self.pixels_per_particle,
+            self.pixels_per_particle,
+            color,
+        );
+    }
+
+    fn draw_source(&self, x: usize, y: usize, color: Color, replaces: bool, sink: bool) {
+        let (px, py) = self.xy_to_pixels(x, y);
+        draw_rectangle(
+            px,
+            py,
+            self.pixels_per_particle,
+            self.pixels_per_particle,
+            color,
+        );
+
+        // if !empty {
+        let hatch_color = if replaces || sink {
+            Color::new(0.0, 0.0, 0.0, 0.2)
+        } else {
+            Color::new(1.0, 1.0, 1.0, 0.5)
+        };
+
+        draw_line(
+            px,
+            py,
+            px + self.pixels_per_particle,
+            py + self.pixels_per_particle,
+            1.0,
+            hatch_color,
+        );
+    }
+
+    fn draw_portal(&self, x: usize, y: usize, direction: Direction, color: Color) {
+        let (px, py) = self.xy_to_pixels(x, y);
+        // draw_line()
+        let pix_per = self.pixels_per_particle;
+        let thickness = pix_per / 4.0;
+        let (ptx, pty, w, h): (f32, f32, f32, f32) = match direction {
+            Direction::Up => (px, py, pix_per, thickness),
+            Direction::Right => (px + pix_per - thickness, py, thickness, pix_per),
+            Direction::Down => (px, py + pix_per - thickness, pix_per, thickness),
+            Direction::Left => (px, py, thickness, pix_per),
+        };
+
+        draw_rectangle(ptx, pty, w, h, color);
+    }
 }
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
@@ -218,11 +273,22 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
 
     let (px, py) = mouse_position();
 
-    if px > WORLD_PX0 && px < screen_width() && py > WORLD_PY0 && py < screen_height() {
-        let (mousex_min, mousex_max, mousey_min, mousey_max) =
-            calculate_brush(px, py, settings.brush_size, world.width(), world.height());
+    if px > settings.painter.world_px0
+        && px < screen_width()
+        && py > settings.painter.world_py0
+        && py < screen_height()
+    {
+        let (mousex_min, mousex_max, mousey_min, mousey_max) = settings.painter.calculate_brush(
+            px,
+            py,
+            settings.brush_size,
+            world.width(),
+            world.height(),
+        );
 
-        let (mousex, mousey) = mouse_location(world.width(), world.height());
+        let (mousex, mousey) = settings
+            .painter
+            .mouse_location(world.width(), world.height());
 
         // Check whether the location/size of the portal we're trying to place is valid
         settings.portal_placement_valid = true;
@@ -290,9 +356,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
     }
     // Reset on "R"
     if is_key_pressed(KeyCode::R) {
-        settings.last_portal_placed = vec![];
-        settings.waiting_for_partner_portal = false;
-        *world = World::new(world.width(), world.height());
+        *world = settings.resize_world_and_screen();
     }
 
     // Change brush size with mouse wheel
@@ -462,36 +526,9 @@ fn create_placeable(
     }
 }
 
-/// Function to calculate the coordinates of the placement brush
-fn calculate_brush(
-    px: f32,
-    py: f32,
-    brush_size: f32,
-    grid_width: usize,
-    grid_height: usize,
-) -> (usize, usize, usize, usize) {
-    let (mousex, mousey) = pixels_to_xy::<f32>(px, py);
-    let brush_span = brush_size / 2.0;
-    let mousex_min = (mousex - brush_span).clamp(0., grid_width as f32) as usize;
-    let mousex_max = (mousex + brush_span).clamp(0., grid_width as f32) as usize;
-    let mousey_min = (mousey - brush_span).clamp(0., grid_height as f32) as usize;
-    let mousey_max = (mousey + brush_span).clamp(0., grid_height as f32) as usize;
-
-    (mousex_min, mousex_max, mousey_min, mousey_max)
-}
-
-fn mouse_location(grid_width: usize, grid_height: usize) -> (usize, usize) {
-    let (px, py) = mouse_position();
-    let (mousex, mousey) = pixels_to_xy::<f32>(px, py);
-    (
-        mousex.clamp(0., grid_width as f32 - 1.0) as usize,
-        mousey.clamp(0., grid_height as f32 - 1.0) as usize,
-    )
-}
-
-fn debug_particle_string(world: &World) -> String {
+fn debug_particle_string(world: &World, painter: &Painter) -> String {
     // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
-    let (x, y) = mouse_location(world.width(), world.height());
+    let (x, y) = painter.mouse_location(world.width(), world.height());
     let p = world.particle_at((x, y));
     format!("({}, {}): {:?}", x, y, p)
 }
@@ -510,166 +547,252 @@ impl PlaceableSelector {
             PlaceableSelector::Particle => "Particle",
             PlaceableSelector::Source => "Source",
             PlaceableSelector::Sink => "Sink",
-            PlaceableSelector::Portal => "Portal (buggy)",
+            PlaceableSelector::Portal => "Portal",
         }
     }
 }
 
 fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps: f64) {
     egui::Window::new("")
-        .resizable(false)
+        // .resizable(false)
         .title_bar(false)
-        .fixed_size([WORLD_PX0 - 13.0, WORLD_PY0])
-        .resizable(false)
+        .fixed_size([
+            settings.painter.world_px0 - 13.0,
+            settings.painter.world_py0,
+        ])
         .anchor(egui::Align2::LEFT_TOP, [0., 0.])
         .show(ctx, |ui| {
             // ui.label("Test");
-            ui.group(|ui| {
-                ui.horizontal(|ui| {
+            ui.horizontal(|ui| {
+                ui.group(|ui| {
                     ui.selectable_value(&mut settings.paused, true, "⏸");
                     ui.selectable_value(&mut settings.paused, false, "▶");
                     if ui.button("⏭").clicked() && settings.paused {
                         world.update_all();
                     }
-                    ui.allocate_space(ui.available_size());
                 });
-            });
-            ui.group(|ui| {
-                ui.label(format!("Framerate: {:.1}", fps));
-                ui.allocate_space(ui.available_size());
-            });
-            ui.group(|ui| {
-                ui.checkbox(&mut settings.debug_mode, "debug");
-                ui.allocate_space(ui.available_size());
-            });
-            ui.group(|ui| {
-                ComboBox::from_label("")
-                    .selected_text(settings.placeable_selector.as_str())
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut settings.placeable_selector,
-                            PlaceableSelector::Particle,
-                            PlaceableSelector::Particle.as_str(),
-                        );
-                        ui.selectable_value(
-                            &mut settings.placeable_selector,
-                            PlaceableSelector::Source,
-                            PlaceableSelector::Source.as_str(),
-                        );
-                        ui.selectable_value(
-                            &mut settings.placeable_selector,
-                            PlaceableSelector::Sink,
-                            PlaceableSelector::Sink.as_str(),
-                        );
-                        ui.selectable_value(
-                            &mut settings.placeable_selector,
-                            PlaceableSelector::Portal,
-                            PlaceableSelector::Portal.as_str(),
-                        );
-                    });
 
-                ui.allocate_space(ui.available_size());
-            });
-            ui.group(|ui| {
-                ui.checkbox(&mut settings.sources_replace, "New Sources Replace?");
-                ui.allocate_space(ui.available_size());
-            });
-            ui.horizontal(|ui| {
                 ui.group(|ui| {
-                    ui.label("Brush Size");
-                    ui.add(
-                        egui::DragValue::new(&mut settings.brush_size)
-                            .clamp_range(1.0..=30.0)
-                            .fixed_decimals(0)
-                            .speed(0.2),
-                    );
-                    // if ui.button("➕").clicked() {
-                    //     settings.brush_size += 1.0;
-                    // }
-                    // if ui.button("➖").clicked() {
-                    //     settings.brush_size -= 1.0;
-                    // }
-                    ui.allocate_space(ui.available_size());
+                    ui.label(format!("FPS: {:.1}", fps));
                 });
             });
-            ui.group(|ui| {
-                ui.checkbox(&mut settings.replace, "Replace");
-                ui.allocate_space(ui.available_size());
-            });
-            ui.group(|ui| {
-                ui.toggle_value(&mut settings.delete, "Delete");
-                ui.allocate_space(ui.available_size());
-            });
-            ui.group(|ui| {
-                // ui.vertical(|ui| {
-                // ui.style_mut().visuals.
-                // let mut job = egui::text::LayoutJob::default();
-                // job.append(
-                //     "Sand",
-                //     0.0,
-                //     TextFormat {
-                //         background: egui::Color32::YELLOW,
-                //         ..Default::default()
-                //     },
-                // );
-                if settings.placeable_selector == PlaceableSelector::Portal {
-                    ui.label("Portal Direction: ");
-                    ui.selectable_value(&mut settings.portal_direction, Direction::Up, "Up");
-                    ui.selectable_value(&mut settings.portal_direction, Direction::Right, "Right");
-                    ui.selectable_value(&mut settings.portal_direction, Direction::Down, "Down");
-                    ui.selectable_value(&mut settings.portal_direction, Direction::Left, "Left");
-                } else if settings.delete || settings.placeable_selector == PlaceableSelector::Sink
-                {
-                    settings.placement_type = ParticleType::Empty;
-                    ui.label("Sand");
-                    ui.label("Water");
-                    ui.label("Concrete");
-                    ui.label("Steam");
-                    ui.label("Fungus");
-                    ui.label("Flame");
-                } else {
-                    // ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::GOLD;
-                    // ui.visuals_mut().widgets.noninteractive.bg_fill = egui::Color32::GOLD;
-                    ui.selectable_value(&mut settings.placement_type, ParticleType::Sand, "Sand");
-                    ui.selectable_value(&mut settings.placement_type, ParticleType::Water, "Water");
-                    ui.selectable_value(
-                        &mut settings.placement_type,
-                        ParticleType::Concrete,
-                        "Concrete",
-                    );
-                    ui.selectable_value(&mut settings.placement_type, ParticleType::Wood, "Wood");
-                    ui.selectable_value(&mut settings.placement_type, ParticleType::Steam, "Steam");
-                    ui.selectable_value(
-                        &mut settings.placement_type,
-                        ParticleType::Fungus,
-                        "Fungus",
-                    );
-                    ui.selectable_value(&mut settings.placement_type, ParticleType::Flame, "Flame");
-                    ui.selectable_value(
-                        &mut settings.placement_type,
-                        ParticleType::Methane,
-                        "Methane",
-                    );
-                    ui.selectable_value(
-                        &mut settings.placement_type,
-                        ParticleType::Gunpowder,
-                        "Gunpowder",
-                    );
-                    #[rustfmt::skip]
-                    ui.selectable_value(
-                        &mut settings.placement_type,
-                        ParticleType::Oil,
-                        "Oil"
-                    );
+
+            ui.separator();
+
+            egui::Grid::new("1").num_columns(2).show(ui, |ui| {
+                egui::Grid::new("")
+                    .num_columns(2)
+                    .striped(true)
+                    .show(ui, |ui| {
+                        // ui.group(|ui| {
+                        // ui.horizontal(|ui| {
+                        ui.label("New Width:  ");
+                        ui.add(
+                            egui::DragValue::new(&mut settings.new_size.0)
+                                .clamp_range(1..=1000)
+                                .fixed_decimals(0)
+                                .speed(5),
+                        );
+                        // });
+                        ui.end_row();
+                        // ui.horizontal(|ui| {
+                        ui.label("New Height: ");
+                        ui.add(
+                            egui::DragValue::new(&mut settings.new_size.1)
+                                .clamp_range(1..=1000)
+                                .fixed_decimals(0)
+                                .speed(5),
+                        );
+                        // });
+                        ui.end_row();
+
+                        // ui.horizontal(|ui| {
+                        ui.label("New Scale: ");
+                        ui.add(
+                            egui::DragValue::new(&mut settings.new_pixels_per_particle)
+                                .clamp_range(1.0..=30.0)
+                                .fixed_decimals(0)
+                                .speed(0.5),
+                        );
+                        // });
+                        ui.end_row();
+                    });
+                if ui.add(egui::Button::new("Reset/\nResize")).clicked() {
+                    *world = settings.resize_world_and_screen();
                 }
-                // ui.allocate_space(ui.available_size());
+                ui.end_row();
                 // });
             });
+
+            ui.separator();
+
+            egui::Grid::new("2")
+                .num_columns(2)
+                .striped(true)
+                .show(ui, |ui| {
+                    ui.label("Debug");
+                    ui.checkbox(&mut settings.debug_mode, "");
+                    ui.end_row();
+
+                    ui.label("New Sources Replace");
+                    ui.checkbox(&mut settings.sources_replace, "");
+                    ui.end_row();
+
+                    ui.label("Replace");
+                    ui.checkbox(&mut settings.replace, "");
+                    ui.end_row();
+
+                    ui.label("Brush Size");
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::DragValue::new(&mut settings.brush_size)
+                                .clamp_range(1.0..=30.0)
+                                .fixed_decimals(0)
+                                .speed(0.2),
+                        );
+                        // if ui.button("➕").clicked() {
+                        //     settings.brush_size += 1.0;
+                        // }
+                        // if ui.button("➖").clicked() {
+                        //     settings.brush_size -= 1.0;
+                        // }
+                    });
+                    ui.end_row();
+
+                    ui.label("Placement Type");
+                    ComboBox::from_label("")
+                        .selected_text(settings.placeable_selector.as_str())
+                        .width(1.0)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut settings.placeable_selector,
+                                PlaceableSelector::Particle,
+                                PlaceableSelector::Particle.as_str(),
+                            );
+                            ui.selectable_value(
+                                &mut settings.placeable_selector,
+                                PlaceableSelector::Source,
+                                PlaceableSelector::Source.as_str(),
+                            );
+                            ui.selectable_value(
+                                &mut settings.placeable_selector,
+                                PlaceableSelector::Sink,
+                                PlaceableSelector::Sink.as_str(),
+                            );
+                            ui.selectable_value(
+                                &mut settings.placeable_selector,
+                                PlaceableSelector::Portal,
+                                PlaceableSelector::Portal.as_str(),
+                            );
+                        });
+                    ui.end_row();
+                });
+            ui.group(|ui| {
+                ui.group(|ui| {
+                    ui.toggle_value(&mut settings.delete, "Delete");
+                });
+                ui.horizontal_wrapped(|ui| {
+                    // ui.vertical(|ui| {
+                    // ui.style_mut().visuals.
+                    // let mut job = egui::text::LayoutJob::default();
+                    // job.append(
+                    //     "Sand",
+                    //     0.0,
+                    //     TextFormat {
+                    //         background: egui::Color32::YELLOW,
+                    //         ..Default::default()
+                    //     },
+                    // );
+                    if settings.placeable_selector == PlaceableSelector::Portal {
+                        ui.label("Portal Direction: ");
+                        ui.selectable_value(&mut settings.portal_direction, Direction::Up, "Up");
+                        ui.selectable_value(
+                            &mut settings.portal_direction,
+                            Direction::Right,
+                            "Right",
+                        );
+                        ui.selectable_value(
+                            &mut settings.portal_direction,
+                            Direction::Down,
+                            "Down",
+                        );
+                        ui.selectable_value(
+                            &mut settings.portal_direction,
+                            Direction::Left,
+                            "Left",
+                        );
+                    } else if settings.delete
+                        || settings.placeable_selector == PlaceableSelector::Sink
+                    {
+                        settings.placement_type = ParticleType::Empty;
+                        ui.label("Sand");
+                        ui.label("Water");
+                        ui.label("Concrete");
+                        ui.label("Steam");
+                        ui.label("Fungus");
+                        ui.label("Flame");
+                    } else {
+                        // ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::GOLD;
+                        // ui.visuals_mut().widgets.noninteractive.bg_fill = egui::Color32::GOLD;
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Sand,
+                            "Sand",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Water,
+                            "Water",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Concrete,
+                            "Concrete",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Wood,
+                            "Wood",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Steam,
+                            "Steam",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Fungus,
+                            "Fungus",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Flame,
+                            "Flame",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Methane,
+                            "Methane",
+                        );
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Gunpowder,
+                            "Gunpowder",
+                        );
+                        #[rustfmt::skip]
+                        ui.selectable_value(
+                            &mut settings.placement_type,
+                            ParticleType::Oil,
+                            "Oil"
+                        );
+                    }
+                });
+            });
+
             if settings.debug_mode {
                 ui.group(|ui| {
-                    ui.label(debug_particle_string(world));
+                    ui.label(debug_particle_string(world, &settings.painter));
                 });
             }
-            // ui.allocate_space(ui.available_size());
         });
 }
