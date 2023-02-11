@@ -1,4 +1,4 @@
-use egui_macroquad::{egui::ComboBox, *};
+use egui_macroquad::{egui, *};
 use macroquad::{
     color::{hsl_to_rgb, rgb_to_hsl},
     prelude::*,
@@ -34,7 +34,7 @@ async fn main() {
         .cycle();
 
     let painter = Painter {
-        pixels_per_particle: 8.0,
+        pixels_per_particle: 4.0,
         world_px0: 225.0,
         world_py0: 0.0,
     };
@@ -56,7 +56,7 @@ async fn main() {
         portal_placement_valid: true,
         portal_color_cycle: color_cycle,
         new_pixels_per_particle: painter.pixels_per_particle,
-        new_size: (100, 100),
+        new_size: (200, 200),
         painter,
     };
 
@@ -660,7 +660,7 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     ui.end_row();
 
                     ui.label("Placement Type");
-                    ComboBox::from_label("")
+                    egui::ComboBox::from_label("")
                         .selected_text(settings.placeable_selector.as_str())
                         .width(1.0)
                         .show_ui(ui, |ui| {
@@ -691,7 +691,7 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                 ui.group(|ui| {
                     ui.toggle_value(&mut settings.delete, "Delete");
                 });
-                ui.horizontal_wrapped(|ui| {
+                ui.vertical_centered_justified(|ui| {
                     // ui.vertical(|ui| {
                     // ui.style_mut().visuals.
                     // let mut job = egui::text::LayoutJob::default();
@@ -734,57 +734,24 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     } else {
                         // ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::GOLD;
                         // ui.visuals_mut().widgets.noninteractive.bg_fill = egui::Color32::GOLD;
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Sand,
-                            "Sand",
-                        );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Water,
-                            "Water",
-                        );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Concrete,
-                            "Concrete",
-                        );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Wood,
-                            "Wood",
-                        );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Steam,
-                            "Steam",
-                        );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Fungus,
-                            "Fungus",
-                        );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Flame,
-                            "Flame",
-                        );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Methane,
-                            "Methane",
-                        );
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Gunpowder,
-                            "Gunpowder",
-                        );
-                        #[rustfmt::skip]
-                        ui.selectable_value(
-                            &mut settings.placement_type,
-                            ParticleType::Oil,
-                            "Oil"
-                        );
+
+                        ui.visuals_mut().selection = egui::style::Selection {
+                            bg_fill: egui::Color32::from_white_alpha(10),
+                            stroke: egui::Stroke {
+                                width: 10.0,
+                                color: egui::Color32::RED,
+                            },
+                        };
+                        particle_selector(ui, ParticleType::Sand, settings);
+                        particle_selector(ui, ParticleType::Water, settings);
+                        particle_selector(ui, ParticleType::Concrete, settings);
+                        particle_selector(ui, ParticleType::Steam, settings);
+                        particle_selector(ui, ParticleType::Fungus, settings);
+                        particle_selector(ui, ParticleType::Flame, settings);
+                        particle_selector(ui, ParticleType::Methane, settings);
+                        particle_selector(ui, ParticleType::Gunpowder, settings);
+                        particle_selector(ui, ParticleType::Oil, settings);
+                        particle_selector(ui, ParticleType::Wood, settings);
                     }
                 });
             });
@@ -795,4 +762,27 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                 });
             }
         });
+}
+
+fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Settings) {
+    egui::Frame::none()
+        .fill(ptype.properties().base_color.to_egui())
+        .show(ui, |ui| {
+            ui.selectable_value(&mut settings.placement_type, ptype, ptype.label());
+        });
+}
+
+trait ToEguiColor {
+    fn to_egui(&self) -> egui::color::Color32;
+}
+
+impl ToEguiColor for macroquad::color::Color {
+    fn to_egui(&self) -> egui::color::Color32 {
+        egui::Color32::from_rgba_unmultiplied(
+            (self.r * 255.0) as u8,
+            (self.g * 255.0) as u8,
+            (self.b * 255.0) as u8,
+            (self.a * 255.0) as u8,
+        )
+    }
 }

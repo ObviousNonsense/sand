@@ -31,6 +31,23 @@ pub struct ParticleTypeProperties {
 }
 
 impl ParticleType {
+    pub fn label(&self) -> &str {
+        match self {
+            ParticleType::Empty => "Empty",
+            ParticleType::Border => "Border",
+            ParticleType::Sand => "Sand",
+            ParticleType::Water => "Water",
+            ParticleType::Concrete => "Concrete",
+            ParticleType::Steam => "Steam",
+            ParticleType::Fungus => "Fungus",
+            ParticleType::Flame => "Flame",
+            ParticleType::Methane => "Methane",
+            ParticleType::Gunpowder => "Gunpowder",
+            ParticleType::Oil => "Oil",
+            ParticleType::Wood => "Wood",
+        }
+    }
+
     pub const fn properties(&self) -> ParticleTypeProperties {
         match self {
             ParticleType::Border => ParticleTypeProperties {
