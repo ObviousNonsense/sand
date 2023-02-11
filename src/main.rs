@@ -471,77 +471,80 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
         .anchor(egui::Align2::LEFT_TOP, [0., 0.])
         .show(ctx, |ui| {
             // ui.label("Test");
-            ui.horizontal(|ui| {
-                ui.group(|ui| {
-                    // ui.horizontal(|ui| {
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
                     ui.selectable_value(&mut settings.paused, true, "⏸");
                     ui.selectable_value(&mut settings.paused, false, "▶");
                     if ui.button("⏭").clicked() && settings.paused {
                         world.update_all();
                     }
-                    // });
+                    ui.allocate_space(ui.available_size());
                 });
-                // ui.allocate_space(ui.);
-                ui.group(|ui| {
-                    ui.label(format!("Framerate: {:.1}", fps));
-                });
-                ui.group(|ui| ui.checkbox(&mut settings.debug_mode, "debug"));
-            });
-            ui.horizontal(|ui| {
-                ui.group(|ui| {
-                    ComboBox::from_label("")
-                        .selected_text(settings.placeable_selector.as_str())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut settings.placeable_selector,
-                                PlaceableSelector::Particle,
-                                PlaceableSelector::Particle.as_str(),
-                            );
-                            ui.selectable_value(
-                                &mut settings.placeable_selector,
-                                PlaceableSelector::Source,
-                                PlaceableSelector::Source.as_str(),
-                            );
-                            ui.selectable_value(
-                                &mut settings.placeable_selector,
-                                PlaceableSelector::Sink,
-                                PlaceableSelector::Sink.as_str(),
-                            );
-                            ui.selectable_value(
-                                &mut settings.placeable_selector,
-                                PlaceableSelector::Portal,
-                                PlaceableSelector::Portal.as_str(),
-                            );
-                        })
-                });
-                if settings.placeable_selector == PlaceableSelector::Source {
-                    ui.group(|ui| {
-                        ui.checkbox(&mut settings.sources_replace, "New Sources Replace?")
-                    });
-                }
             });
             ui.group(|ui| {
-                ui.toggle_value(&mut settings.delete, "Delete");
+                ui.label(format!("Framerate: {:.1}", fps));
+                ui.allocate_space(ui.available_size());
+            });
+            ui.group(|ui| {
+                ui.checkbox(&mut settings.debug_mode, "debug");
+                ui.allocate_space(ui.available_size());
+            });
+            ui.group(|ui| {
+                ComboBox::from_label("")
+                    .selected_text(settings.placeable_selector.as_str())
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut settings.placeable_selector,
+                            PlaceableSelector::Particle,
+                            PlaceableSelector::Particle.as_str(),
+                        );
+                        ui.selectable_value(
+                            &mut settings.placeable_selector,
+                            PlaceableSelector::Source,
+                            PlaceableSelector::Source.as_str(),
+                        );
+                        ui.selectable_value(
+                            &mut settings.placeable_selector,
+                            PlaceableSelector::Sink,
+                            PlaceableSelector::Sink.as_str(),
+                        );
+                        ui.selectable_value(
+                            &mut settings.placeable_selector,
+                            PlaceableSelector::Portal,
+                            PlaceableSelector::Portal.as_str(),
+                        );
+                    });
+
+                ui.allocate_space(ui.available_size());
+            });
+            ui.group(|ui| {
+                ui.checkbox(&mut settings.sources_replace, "New Sources Replace?");
+                ui.allocate_space(ui.available_size());
             });
             ui.horizontal(|ui| {
                 ui.group(|ui| {
-                    ui.label("Brush Size: ");
+                    ui.label("Brush Size");
                     ui.add(
                         egui::DragValue::new(&mut settings.brush_size)
                             .clamp_range(1.0..=30.0)
                             .fixed_decimals(0)
                             .speed(0.2),
                     );
-                    if ui.button("➕").clicked() {
-                        settings.brush_size += 1.0;
-                    }
-                    if ui.button("➖").clicked() {
-                        settings.brush_size -= 1.0;
-                    }
+                    // if ui.button("➕").clicked() {
+                    //     settings.brush_size += 1.0;
+                    // }
+                    // if ui.button("➖").clicked() {
+                    //     settings.brush_size -= 1.0;
+                    // }
+                    ui.allocate_space(ui.available_size());
                 });
-                ui.group(|ui| {
-                    ui.checkbox(&mut settings.replace, "Replace");
-                });
+            });
+            ui.group(|ui| {
+                ui.checkbox(&mut settings.replace, "Replace");
+                ui.allocate_space(ui.available_size());
+            });
+            ui.group(|ui| {
+                ui.toggle_value(&mut settings.delete, "Delete");
                 ui.allocate_space(ui.available_size());
             });
             ui.group(|ui| {
@@ -647,6 +650,6 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     ui.label(debug_particle_string(world));
                 });
             }
-            ui.allocate_space(ui.available_size());
+            // ui.allocate_space(ui.available_size());
         });
 }

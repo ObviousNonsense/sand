@@ -237,13 +237,12 @@ impl World {
     fn update_all_particles(&mut self) {
         // TODO: Consider pre-generating this and storing it (either pass it
         // into the function or store it in the struct and clone it here)
-        let mut idx_range: Vec<usize> = ((self.width + 1)..(self.width * self.height - 2))
-            .rev()
-            .collect();
+        let mut idx_range: Vec<usize> =
+            ((self.width + 1)..(self.width * self.height - 2)).collect();
         idx_range.shuffle(&mut self.rng);
-        for idx in idx_range.iter() {
+        for idx in idx_range.into_iter() {
             // let idx = *idx;
-            let xy = self.index_to_xy(*idx);
+            let xy = self.index_to_xy(idx);
 
             let mut particle_clone = self.particle_grid[xy].clone();
 
