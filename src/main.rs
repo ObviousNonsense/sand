@@ -135,6 +135,7 @@ struct Settings {
 
 impl Settings {
     fn resize_world_and_screen(&mut self) -> World {
+        self.painter.pixels_per_particle = self.new_pixels_per_particle;
         // Something wrong with this on Mac for some reason. But also without it the
         // display is wrong on windows when the 4k monitor with 150% scaling is the
         // primary monitor
@@ -146,7 +147,6 @@ impl Settings {
         self.last_portal_placed = vec![];
         self.waiting_for_partner_portal = false;
 
-        self.painter.pixels_per_particle = self.new_pixels_per_particle;
         World::new(self.new_size.0, self.new_size.1)
     }
 }
