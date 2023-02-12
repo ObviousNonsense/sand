@@ -138,8 +138,8 @@ impl ParticleType {
                 moves: true,
                 fluid: false,
                 condensates: false,
-                flammability: 0.7,
-                base_fuel: Some(25),
+                flammability: 0.6,
+                base_fuel: Some(35),
             },
             ParticleType::Oil => ParticleTypeProperties {
                 base_color: Color::new(0.44, 0.34, 0.18, 1.0),
@@ -147,8 +147,8 @@ impl ParticleType {
                 moves: true,
                 fluid: true,
                 condensates: false,
-                flammability: 0.95,
-                base_fuel: Some(15),
+                flammability: 0.9,
+                base_fuel: Some(25),
             },
             ParticleType::Wood => ParticleTypeProperties {
                 base_color: Color::new(0.3, 0.22, 0.17, 1.0),

@@ -1,4 +1,4 @@
-use egui_macroquad::{egui, *};
+use egui_macroquad::{egui, egui::RichText, *};
 use macroquad::{
     color::{hsl_to_rgb, rgb_to_hsl},
     prelude::*,
@@ -34,7 +34,7 @@ async fn main() {
         .cycle();
 
     let painter = Painter {
-        pixels_per_particle: 4.0,
+        pixels_per_particle: 6.0,
         world_px0: 225.0,
         world_py0: 0.0,
     };
@@ -46,6 +46,7 @@ async fn main() {
         placeable_selector: PlaceableSelector::Particle,
         sources_replace: false,
         placement_type: ParticleType::Sand,
+        last_placement_type: ParticleType::Sand,
         delete: false,
         replace: false,
         debug_mode: false,
@@ -56,7 +57,7 @@ async fn main() {
         portal_placement_valid: true,
         portal_color_cycle: color_cycle,
         new_pixels_per_particle: painter.pixels_per_particle,
-        new_size: (200, 200),
+        new_size: (150, 150),
         painter,
     };
 
@@ -119,6 +120,7 @@ struct Settings {
     placeable_selector: PlaceableSelector,
     sources_replace: bool,
     placement_type: ParticleType,
+    last_placement_type: ParticleType,
     delete: bool,
     replace: bool,
     debug_mode: bool,
@@ -658,102 +660,105 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         // }
                     });
                     ui.end_row();
-
-                    ui.label("Placement Type");
-                    egui::ComboBox::from_label("")
-                        .selected_text(settings.placeable_selector.as_str())
-                        .width(1.0)
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut settings.placeable_selector,
-                                PlaceableSelector::Particle,
-                                PlaceableSelector::Particle.as_str(),
-                            );
-                            ui.selectable_value(
-                                &mut settings.placeable_selector,
-                                PlaceableSelector::Source,
-                                PlaceableSelector::Source.as_str(),
-                            );
-                            ui.selectable_value(
-                                &mut settings.placeable_selector,
-                                PlaceableSelector::Sink,
-                                PlaceableSelector::Sink.as_str(),
-                            );
-                            ui.selectable_value(
-                                &mut settings.placeable_selector,
-                                PlaceableSelector::Portal,
-                                PlaceableSelector::Portal.as_str(),
-                            );
-                        });
-                    ui.end_row();
                 });
+
+            // ui.label("Placement Type");
+            // egui::ComboBox::from_label("")
+            //     .selected_text(settings.placeable_selector.as_str())
+            //     .width(1.0)
+            //     .show_ui(ui, |ui| {
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.selectable_value(
+                    &mut settings.placeable_selector,
+                    PlaceableSelector::Particle,
+                    PlaceableSelector::Particle.as_str(),
+                );
+                ui.selectable_value(
+                    &mut settings.placeable_selector,
+                    PlaceableSelector::Source,
+                    PlaceableSelector::Source.as_str(),
+                );
+                ui.selectable_value(
+                    &mut settings.placeable_selector,
+                    PlaceableSelector::Sink,
+                    PlaceableSelector::Sink.as_str(),
+                );
+                ui.selectable_value(
+                    &mut settings.placeable_selector,
+                    PlaceableSelector::Portal,
+                    PlaceableSelector::Portal.as_str(),
+                );
+            });
+            // });
+            // ui.end_row();
             ui.group(|ui| {
-                ui.group(|ui| {
-                    ui.toggle_value(&mut settings.delete, "Delete");
-                });
-                ui.vertical_centered_justified(|ui| {
-                    // ui.vertical(|ui| {
-                    // ui.style_mut().visuals.
-                    // let mut job = egui::text::LayoutJob::default();
-                    // job.append(
-                    //     "Sand",
-                    //     0.0,
-                    //     TextFormat {
-                    //         background: egui::Color32::YELLOW,
-                    //         ..Default::default()
-                    //     },
-                    // );
-                    if settings.placeable_selector == PlaceableSelector::Portal {
-                        ui.label("Portal Direction: ");
-                        ui.selectable_value(&mut settings.portal_direction, Direction::Up, "Up");
-                        ui.selectable_value(
-                            &mut settings.portal_direction,
-                            Direction::Right,
-                            "Right",
-                        );
-                        ui.selectable_value(
-                            &mut settings.portal_direction,
-                            Direction::Down,
-                            "Down",
-                        );
-                        ui.selectable_value(
-                            &mut settings.portal_direction,
-                            Direction::Left,
-                            "Left",
-                        );
-                    } else if settings.delete
-                        || settings.placeable_selector == PlaceableSelector::Sink
-                    {
+                ui.vertical_centered(|ui| {
+                    ui.group(|ui| {
+                        ui.toggle_value(&mut settings.delete, "Delete");
+                    });
+                    if settings.delete || settings.placeable_selector == PlaceableSelector::Sink {
+                        if settings.placement_type != ParticleType::Empty {
+                            settings.last_placement_type = settings.placement_type;
+                        }
                         settings.placement_type = ParticleType::Empty;
-                        ui.label("Sand");
-                        ui.label("Water");
-                        ui.label("Concrete");
-                        ui.label("Steam");
-                        ui.label("Fungus");
-                        ui.label("Flame");
-                    } else {
-                        // ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::GOLD;
-                        // ui.visuals_mut().widgets.noninteractive.bg_fill = egui::Color32::GOLD;
-
-                        ui.visuals_mut().selection = egui::style::Selection {
-                            bg_fill: egui::Color32::from_white_alpha(10),
-                            stroke: egui::Stroke {
-                                width: 10.0,
-                                color: egui::Color32::RED,
-                            },
-                        };
-                        particle_selector(ui, ParticleType::Sand, settings);
-                        particle_selector(ui, ParticleType::Water, settings);
-                        particle_selector(ui, ParticleType::Concrete, settings);
-                        particle_selector(ui, ParticleType::Steam, settings);
-                        particle_selector(ui, ParticleType::Fungus, settings);
-                        particle_selector(ui, ParticleType::Flame, settings);
-                        particle_selector(ui, ParticleType::Methane, settings);
-                        particle_selector(ui, ParticleType::Gunpowder, settings);
-                        particle_selector(ui, ParticleType::Oil, settings);
-                        particle_selector(ui, ParticleType::Wood, settings);
+                    } else if settings.placement_type == ParticleType::Empty {
+                        settings.placement_type = settings.last_placement_type;
                     }
+
+                    // ui.visuals_mut().selection = egui::style::Selection {
+                    //     bg_fill: egui::Color32::from_white_alpha(100),
+                    //     stroke: egui::Stroke {
+                    //         width: 10.0,
+                    //         color: egui::Color32::RED,
+                    //     },
+                    // };
+
+                    particle_selector(ui, ParticleType::Sand, settings);
+                    particle_selector(ui, ParticleType::Water, settings);
+                    particle_selector(ui, ParticleType::Concrete, settings);
+                    particle_selector(ui, ParticleType::Steam, settings);
+                    particle_selector(ui, ParticleType::Fungus, settings);
+                    particle_selector(ui, ParticleType::Flame, settings);
+                    particle_selector(ui, ParticleType::Methane, settings);
+                    particle_selector(ui, ParticleType::Gunpowder, settings);
+                    particle_selector(ui, ParticleType::Oil, settings);
+                    particle_selector(ui, ParticleType::Wood, settings);
                 });
+            });
+            ui.separator();
+            egui::Grid::new("3").num_columns(4).show(ui, |ui| {
+                ui.label("");
+                ui.label("");
+                ui.selectable_value(
+                    &mut settings.portal_direction,
+                    Direction::Up,
+                    RichText::new("⮉").size(24.0),
+                );
+                ui.label("");
+                ui.end_row();
+                ui.label("Portal\nDirection:");
+                ui.selectable_value(
+                    &mut settings.portal_direction,
+                    Direction::Left,
+                    RichText::new("⮈").size(24.0),
+                );
+                ui.label("");
+                ui.selectable_value(
+                    &mut settings.portal_direction,
+                    Direction::Right,
+                    RichText::new("⮊").size(24.0),
+                );
+                ui.end_row();
+                ui.label("");
+                ui.label("");
+                ui.selectable_value(
+                    &mut settings.portal_direction,
+                    Direction::Down,
+                    RichText::new("⮋").size(24.0),
+                );
+                ui.label("");
+                ui.end_row();
             });
 
             if settings.debug_mode {
@@ -765,10 +770,21 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
 }
 
 fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Settings) {
+    // ui.selectable_value(&mut settings.placement_type, ptype, "");
     egui::Frame::none()
         .fill(ptype.properties().base_color.to_egui())
         .show(ui, |ui| {
-            ui.selectable_value(&mut settings.placement_type, ptype, ptype.label());
+            // ui.label("");
+            ui.selectable_value(
+                &mut settings.placement_type,
+                ptype,
+                RichText::new(ptype.label())
+                    .strong()
+                    .monospace()
+                    .background_color(egui::Color32::from_black_alpha(150)),
+            );
+            // ui.label("");
+            // ui.allocate_space(ui.available_size());
         });
 }
 
