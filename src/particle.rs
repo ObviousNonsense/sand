@@ -8,6 +8,7 @@ pub struct ParticleTypeProperties {
     pub base_color: Color,
     pub weight: f32,
     pub moves: bool,
+    pub auto_move: bool,
     pub fluid: bool,
     pub condensates: bool,
     pub flammability: f32,
@@ -30,15 +31,17 @@ pub enum ParticleType {
     Gunpowder = 9,
     Oil = 10,
     Wood = 11,
+    Acid = 12,
 }
 
-const PROPERTIES: [ParticleTypeProperties; 12] = [
+const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Border = 0
     ParticleTypeProperties {
         label: "Border",
         base_color: GRAY,
         weight: f32::INFINITY,
         moves: false,
+        auto_move: false,
         fluid: false,
         condensates: false,
         flammability: 0.0,
@@ -51,6 +54,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: GRAY,
         weight: f32::INFINITY,
         moves: false,
+        auto_move: false,
         fluid: false,
         condensates: false,
         flammability: 0.0,
@@ -63,6 +67,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: Color::new(0.2, 0.2, 0.2, 1.0),
         weight: 1.0,
         moves: false,
+        auto_move: false,
         fluid: false,
         condensates: false,
         flammability: 0.0,
@@ -75,6 +80,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: YELLOW,
         weight: 90.0,
         moves: true,
+        auto_move: true,
         fluid: false,
         condensates: false,
         flammability: 0.0,
@@ -87,6 +93,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: BLUE,
         weight: 60.0,
         moves: true,
+        auto_move: true,
         fluid: true,
         condensates: false,
         flammability: 0.0,
@@ -99,6 +106,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: Color::new(0.753, 0.824, 0.949, 1.0),
         weight: 0.5,
         moves: true,
+        auto_move: false,
         fluid: true,
         condensates: true,
         flammability: 0.0,
@@ -111,6 +119,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: Color::new(0.41, 0.58, 0.51, 1.0),
         weight: f32::INFINITY,
         moves: false,
+        auto_move: false,
         fluid: false,
         condensates: false,
         flammability: 0.125,
@@ -123,6 +132,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: Color::new(1.0, 0.47, 0.0, 1.0),
         weight: f32::INFINITY,
         moves: false,
+        auto_move: false,
         fluid: false,
         condensates: false,
         flammability: 0.0,
@@ -135,6 +145,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: Color::new(0.58, 0.47, 0.66, 1.0),
         weight: 0.2,
         moves: true,
+        auto_move: true,
         fluid: true,
         condensates: false,
         flammability: 0.95,
@@ -147,6 +158,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: BLACK,
         weight: 90.0,
         moves: true,
+        auto_move: true,
         fluid: false,
         condensates: false,
         flammability: 0.6,
@@ -159,6 +171,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: Color::new(0.44, 0.34, 0.18, 1.0),
         weight: 50.0,
         moves: true,
+        auto_move: true,
         fluid: true,
         condensates: false,
         flammability: 0.9,
@@ -171,11 +184,25 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
         base_color: Color::new(0.3, 0.22, 0.17, 1.0),
         weight: f32::INFINITY,
         moves: false,
+        auto_move: false,
         fluid: false,
         condensates: false,
         flammability: 0.1,
         wet_flammability: None,
         base_fuel: Some(200),
+    },
+    // Acid = 12
+    ParticleTypeProperties {
+        label: "Acid",
+        base_color: Color::new(0.67, 0.98, 0.25, 1.0),
+        weight: 80.0,
+        moves: true,
+        auto_move: false,
+        fluid: true,
+        condensates: false,
+        flammability: 0.0,
+        wet_flammability: None,
+        base_fuel: None,
     },
 ];
 
@@ -198,6 +225,19 @@ fn scale_hsl_of_color(c: Color, scale_h: f32, scale_s: f32, scale_l: f32) -> Col
 enum Deleted {
     True,
     False,
+}
+
+impl Deleted {
+    fn or(&self, other: Deleted) -> Deleted {
+        match (self, other) {
+            (Deleted::False, Deleted::False) => Deleted::False,
+            _ => Deleted::True,
+        }
+    }
+
+    fn update(&mut self, other: Deleted) {
+        *self = self.or(other);
+    }
 }
 
 // #[derive(Debug)]
@@ -281,16 +321,18 @@ impl Particle {
 
     pub fn update(&mut self, mut api: WorldApi) {
         let mut deleted = Deleted::False;
+        let false_premove =
+            |_self: &mut Self, _dxdy: (isize, isize), _api: &mut WorldApi| Deleted::False;
 
-        if self.particle_type.properties().moves && !self.particle_type.properties().condensates {
-            self.movement(&mut api);
+        if self.particle_type.properties().moves && self.particle_type.properties().auto_move {
+            deleted.update(self.movement(&mut api, false_premove));
         }
 
         match self.particle_type {
             ParticleType::Steam => {
                 let lasty = api.xy().1;
-                self.movement(&mut api);
-                deleted = self.update_condensation(&mut api, lasty);
+                self.movement(&mut api, false_premove);
+                deleted.update(self.update_condensation(&mut api, lasty));
             }
             ParticleType::Fungus => {
                 self.grow_fungus(&mut api);
@@ -305,11 +347,17 @@ impl Particle {
                     api.replace_with_new((0, 0), ParticleType::Empty);
                 }
             }
+            ParticleType::Acid => deleted.update(self.movement(
+                &mut api,
+                |particle: &mut Self, dxdy: (isize, isize), api: &mut WorldApi| {
+                    particle.try_mutual_destruction(dxdy, api)
+                },
+            )),
             _ => {}
         }
 
-        if self.burning && deleted == Deleted::False {
-            deleted = self.burn(&mut api);
+        if self.burning {
+            deleted.update(self.burn(&mut api));
         }
 
         if deleted == Deleted::False {
@@ -488,65 +536,86 @@ impl Particle {
 
 /// Movement Methods
 impl Particle {
-    fn movement(&mut self, api: &mut WorldApi) {
+    fn rises(&self) -> bool {
+        self.particle_type.properties().weight < ParticleType::Empty.properties().weight
+    }
+
+    fn movement<F>(&mut self, api: &mut WorldApi, premove_function: F) -> Deleted
+    where
+        F: Fn(&mut Self, (isize, isize), &mut WorldApi) -> Deleted,
+    {
         if self.moved.unwrap() {
-            return;
+            return Deleted::False;
         }
+
+        let check_directions;
+        let mut deleted = Deleted::False;
 
         if self.particle_type.properties().fluid {
-            self.fluid_movement(api);
-        } else {
-            self.sand_movement(api);
-        }
-    }
+            // self.fluid_movement(api);
+            let last_dir;
+            (check_directions, last_dir) = if self.moving_right.unwrap() {
+                (vec![(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)], (-1, 0))
+            } else {
+                (vec![(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)], (1, 0))
+            };
 
-    fn sand_movement(&mut self, api: &mut WorldApi) {
-        let r = api.random::<bool>();
-        let right: isize = if r { -1 } else { 1 };
-        let check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+            let last_dxdy;
+            // TODO: Should maybe find a way to use deleted.update here
+            (deleted, last_dxdy) = self.movement_loop(api, check_directions, premove_function);
 
-        for dxdy in check_directions.into_iter() {
-            if self.try_moving_to(dxdy, api) {
-                break;
+            if let Some(last_dxdy) = last_dxdy {
+                if last_dxdy == (-1, 1) {
+                    self.moving_right = Some(false)
+                }
+                if last_dxdy == (1, 1) {
+                    self.moving_right = Some(true)
+                } else if last_dxdy == last_dir {
+                    self.moving_right = Some(!self.moving_right.unwrap());
+                }
             }
+        } else {
+            // self.sand_movement(api);
+            let r = api.random::<bool>();
+            let right: isize = if r { -1 } else { 1 };
+            check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+            // TODO: Should maybe find a way to use deleted.update here
+            (deleted, _) = self.movement_loop(api, check_directions, premove_function);
         }
+        deleted
     }
 
-    fn fluid_movement(&mut self, api: &mut WorldApi) {
-        let (check_directions, last_dir) = if self.moving_right.unwrap() {
-            ([(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)], (-1, 0))
-        } else {
-            ([(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)], (1, 0))
-        };
-
-        let mut last_dxdy = (0, 0);
-
+    fn movement_loop<F>(
+        &mut self,
+        api: &mut WorldApi,
+        check_directions: Vec<(isize, isize)>,
+        premove_function: F,
+    ) -> (Deleted, Option<(isize, isize)>)
+    where
+        F: Fn(&mut Self, (isize, isize), &mut WorldApi) -> Deleted,
+    {
+        //
+        let mut deleted = Deleted::False;
         for dxdy in check_directions.into_iter() {
+            //
             let dxdy_new = if self.rises() {
                 (dxdy.0, -dxdy.1)
             } else {
                 dxdy
             };
-            if self.try_moving_to(dxdy_new, api) {
-                last_dxdy = dxdy;
-                break;
-            }
-        }
 
-        if self.moved.unwrap() {
-            if last_dxdy == (-1, 1) {
-                self.moving_right = Some(false)
-            }
-            if last_dxdy == (1, 1) {
-                self.moving_right = Some(true)
-            } else if last_dxdy == last_dir {
-                self.moving_right = Some(!self.moving_right.unwrap());
+            deleted.update(premove_function(self, dxdy, api));
+
+            if self.try_moving_to(dxdy_new, api) {
+                return (deleted, Some(dxdy));
             }
         }
+        (deleted, None)
     }
 
-    fn rises(&self) -> bool {
-        self.particle_type.properties().weight < ParticleType::Empty.properties().weight
+    fn try_mutual_destruction(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> Deleted {
+        // println!("TRYING MUTUAL DESTRUCTION");
+        Deleted::False
     }
 
     /// Checks if this particle can and will move in the given direction.
