@@ -326,18 +326,22 @@ impl World {
 
     fn relative_xy(&self, xy: (usize, usize), dxdy: (isize, isize)) -> (usize, usize) {
         // dbg!(xy, dxdy);
-        match &self.portal_grid[xy] {
-            Some(portal) => {
-                if let Some(xy2) = portal.partner_xy {
-                    let portal_dxdy = portal.direction.dxdy();
-                    // dbg!(xy2, portal_dxdy);
-                    if portal_dxdy.0 == dxdy.0 && portal_dxdy.1 == dxdy.1 {
-                        return xy2;
-                    }
+        if let Some(portal) = &self.portal_grid[xy] {
+            if let Some(xy2) = portal.partner_xy {
+                // Might want a bit more logic to make this more comprehensive
+                if dxdy.0 != 0 && dxdy.1 != 0 {
+                    return self
+                        .relative_xy(((xy.0 as isize + dxdy.0) as usize, xy.1), (0, dxdy.1));
+                }
+
+                let portal_dxdy = portal.direction.dxdy();
+                // dbg!(xy2, portal_dxdy);
+                if portal_dxdy.0 == dxdy.0 && portal_dxdy.1 == dxdy.1 {
+                    return xy2;
                 }
             }
-            None => {}
-        };
+        }
+
         (
             (xy.0 as isize + dxdy.0) as usize,
             (xy.1 as isize + dxdy.1) as usize,
