@@ -432,17 +432,16 @@ impl Particle {
 
             // If our neighbour is watered (i.e. a watered fungus), we use its
             // wet_flammability
-            let neighbour_flammability;
             let watered = neighbour.watered.unwrap_or(false);
-            if !watered {
-                neighbour_flammability = neighbour.particle_type.properties().flammability;
+            let neighbour_flammability = if !watered {
+                neighbour.particle_type.properties().flammability
             } else {
-                neighbour_flammability = neighbour
+                neighbour
                     .particle_type
                     .properties()
                     .wet_flammability
-                    .unwrap();
-            }
+                    .unwrap()
+            };
 
             if neighbour_flammability > 0.0 && !neighbour.burning {
                 if neighbour_flammability * (1.0 - 0.5 * dxdy.1 as f32) > r {
