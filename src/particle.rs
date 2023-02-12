@@ -549,7 +549,7 @@ impl Particle {
         }
 
         let check_directions;
-        let mut deleted = Deleted::False;
+        let deleted;
 
         if self.particle_type.properties().fluid {
             // self.fluid_movement(api);
@@ -595,7 +595,6 @@ impl Particle {
         F: Fn(&mut Self, (isize, isize), &mut WorldApi) -> Deleted,
     {
         //
-        let mut deleted = Deleted::False;
         for dxdy in check_directions.into_iter() {
             //
             let dxdy_new = if self.rises() {
@@ -604,17 +603,28 @@ impl Particle {
                 dxdy
             };
 
-            deleted.update(premove_function(self, dxdy, api));
+            let deleted = premove_function(self, dxdy, api);
 
-            if self.try_moving_to(dxdy_new, api) {
+            if deleted == Deleted::True {
+                return (deleted, None);
+            } else if self.try_moving_to(dxdy_new, api) {
                 return (deleted, Some(dxdy));
             }
         }
-        (deleted, None)
+        (Deleted::False, None)
     }
 
     fn try_mutual_destruction(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> Deleted {
         // println!("TRYING MUTUAL DESTRUCTION");
+        let other_ptype = api.neighbour(dxdy).particle_type;
+        if other_ptype != self.particle_type
+            && other_ptype != ParticleType::Border
+            && other_ptype != ParticleType::Empty
+        {
+            api.replace_with_new(dxdy, ParticleType::Empty);
+            api.replace_with_new((0, 0), ParticleType::Empty);
+            return Deleted::True;
+        }
         Deleted::False
     }
 
