@@ -14,6 +14,7 @@ pub struct ParticleTypeProperties {
     pub flammability: f32,
     pub wet_flammability: Option<f32>,
     pub base_fuel: Option<i16>,
+    pub base_durability: Option<i16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -47,6 +48,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
+        base_durability: None,
     },
     // Concrete = 1
     ParticleTypeProperties {
@@ -60,6 +62,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
+        base_durability: Some(100),
     },
     // Empty = 2
     ParticleTypeProperties {
@@ -73,6 +76,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
+        base_durability: None,
     },
     // Sand = 3
     ParticleTypeProperties {
@@ -86,6 +90,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
+        base_durability: Some(20),
     },
     // Water = 4
     ParticleTypeProperties {
@@ -99,6 +104,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
+        base_durability: None,
     },
     // Steam = 5
     ParticleTypeProperties {
@@ -112,6 +118,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
+        base_durability: None,
     },
     // Fungus = 6
     ParticleTypeProperties {
@@ -125,6 +132,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.125,
         wet_flammability: Some(0.015),
         base_fuel: Some(35),
+        base_durability: Some(10),
     },
     // Flame = 7
     ParticleTypeProperties {
@@ -138,6 +146,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: Some(0),
+        base_durability: None,
     },
     // Methane = 8
     ParticleTypeProperties {
@@ -151,6 +160,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.95,
         wet_flammability: None,
         base_fuel: Some(6),
+        base_durability: None,
     },
     // Gunpowder = 9
     ParticleTypeProperties {
@@ -164,6 +174,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.6,
         wet_flammability: None,
         base_fuel: Some(35),
+        base_durability: Some(20),
     },
     // Oil = 10
     ParticleTypeProperties {
@@ -177,6 +188,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.9,
         wet_flammability: None,
         base_fuel: Some(25),
+        base_durability: None,
     },
     // Wood = 11
     ParticleTypeProperties {
@@ -190,12 +202,13 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.1,
         wet_flammability: None,
         base_fuel: Some(200),
+        base_durability: Some(70),
     },
     // Acid = 12
     ParticleTypeProperties {
         label: "Acid",
         base_color: Color::new(0.67, 0.98, 0.25, 1.0),
-        weight: 80.0,
+        weight: 63.0,
         moves: true,
         auto_move: false,
         fluid: true,
@@ -203,6 +216,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
+        base_durability: Some(50),
     },
 ];
 
@@ -255,6 +269,7 @@ pub struct Particle {
     watered: Option<bool>,
     fresh: Option<bool>,
     fuel: Option<i16>,
+    durability: Option<i16>,
 }
 
 // General Particle Methods
@@ -291,6 +306,7 @@ impl Particle {
         };
 
         let fuel = particle_type.properties().base_fuel;
+        let durability = particle_type.properties().base_durability;
 
         let color = if particle_type == ParticleType::Empty {
             particle_type.properties().base_color
@@ -298,7 +314,7 @@ impl Particle {
             scale_hsl_of_color(
                 particle_type.properties().base_color,
                 1.0,
-                rng.gen_range(0.95..1.05),
+                rng.gen_range(0.94..1.06),
                 rng.gen_range(0.98..1.02),
             )
         };
@@ -316,6 +332,7 @@ impl Particle {
             watered,
             fresh,
             fuel,
+            durability,
         }
     }
 
@@ -350,7 +367,7 @@ impl Particle {
             ParticleType::Acid => deleted.update(self.movement(
                 &mut api,
                 |particle: &mut Self, dxdy: (isize, isize), api: &mut WorldApi| {
-                    particle.try_mutual_destruction(dxdy, api)
+                    particle.try_decaying(dxdy, api)
                 },
             )),
             _ => {}
@@ -614,16 +631,22 @@ impl Particle {
         (Deleted::False, None)
     }
 
-    fn try_mutual_destruction(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> Deleted {
-        // println!("TRYING MUTUAL DESTRUCTION");
-        let other_ptype = api.neighbour(dxdy).particle_type;
-        if other_ptype != self.particle_type
-            && other_ptype != ParticleType::Border
-            && other_ptype != ParticleType::Empty
-        {
-            api.replace_with_new(dxdy, ParticleType::Empty);
-            api.replace_with_new((0, 0), ParticleType::Empty);
-            return Deleted::True;
+    fn try_decaying(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> Deleted {
+        let other_p = api.neighbour_mut(dxdy);
+        if other_p.particle_type != self.particle_type {
+            if let Some(other_durability) = other_p.durability.as_mut() {
+                *other_durability -= 1;
+                if let Some(my_durability) = self.durability.as_mut() {
+                    *my_durability -= 1;
+                }
+                if *other_durability < 0 {
+                    api.replace_with_new(dxdy, ParticleType::Empty);
+                }
+                if self.durability.unwrap() < 0 {
+                    api.replace_with_new((0, 0), ParticleType::Empty);
+                    return Deleted::True;
+                }
+            }
         }
         Deleted::False
     }
