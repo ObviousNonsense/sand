@@ -27,6 +27,7 @@ pub struct ParticleTypeProperties {
     pub fluid: bool,
     pub condensates: bool,
     pub flammability: f32,
+    pub wet_flammability: Option<f32>,
     pub base_fuel: Option<i16>,
 }
 
@@ -57,6 +58,7 @@ impl ParticleType {
                 fluid: false,
                 condensates: false,
                 flammability: 0.0,
+                wet_flammability: None,
                 base_fuel: None,
             },
             ParticleType::Concrete => ParticleTypeProperties {
@@ -66,6 +68,7 @@ impl ParticleType {
                 fluid: false,
                 condensates: false,
                 flammability: 0.0,
+                wet_flammability: None,
                 base_fuel: None,
             },
             ParticleType::Empty => ParticleTypeProperties {
@@ -75,6 +78,7 @@ impl ParticleType {
                 fluid: false,
                 condensates: false,
                 flammability: 0.0,
+                wet_flammability: None,
                 base_fuel: None,
             },
             ParticleType::Sand => ParticleTypeProperties {
@@ -84,6 +88,7 @@ impl ParticleType {
                 fluid: false,
                 condensates: false,
                 flammability: 0.0,
+                wet_flammability: None,
                 base_fuel: None,
             },
             ParticleType::Water => ParticleTypeProperties {
@@ -93,6 +98,7 @@ impl ParticleType {
                 fluid: true,
                 condensates: false,
                 flammability: 0.0,
+                wet_flammability: None,
                 base_fuel: None,
             },
             ParticleType::Steam => ParticleTypeProperties {
@@ -102,6 +108,7 @@ impl ParticleType {
                 fluid: true,
                 condensates: true,
                 flammability: 0.0,
+                wet_flammability: None,
                 base_fuel: None,
             },
             // TODO: Make two types: WateredFungus, Dry Fungus
@@ -111,7 +118,8 @@ impl ParticleType {
                 moves: false,
                 fluid: false,
                 condensates: false,
-                flammability: 0.1,
+                flammability: 0.125,
+                wet_flammability: Some(0.015),
                 base_fuel: Some(35),
             },
             ParticleType::Flame => ParticleTypeProperties {
@@ -121,6 +129,7 @@ impl ParticleType {
                 fluid: false,
                 condensates: false,
                 flammability: 0.0,
+                wet_flammability: None,
                 base_fuel: Some(0),
             },
             ParticleType::Methane => ParticleTypeProperties {
@@ -130,6 +139,7 @@ impl ParticleType {
                 fluid: true,
                 condensates: false,
                 flammability: 0.95,
+                wet_flammability: None,
                 base_fuel: Some(6),
             },
             ParticleType::Gunpowder => ParticleTypeProperties {
@@ -139,6 +149,7 @@ impl ParticleType {
                 fluid: false,
                 condensates: false,
                 flammability: 0.6,
+                wet_flammability: None,
                 base_fuel: Some(35),
             },
             ParticleType::Oil => ParticleTypeProperties {
@@ -148,6 +159,7 @@ impl ParticleType {
                 fluid: true,
                 condensates: false,
                 flammability: 0.9,
+                wet_flammability: None,
                 base_fuel: Some(25),
             },
             ParticleType::Wood => ParticleTypeProperties {
@@ -157,6 +169,7 @@ impl ParticleType {
                 fluid: false,
                 condensates: false,
                 flammability: 0.1,
+                wet_flammability: None,
                 base_fuel: Some(200),
             },
         }
@@ -198,8 +211,6 @@ pub struct Particle {
 // General Particle Methods
 impl Particle {
     pub fn new(particle_type: ParticleType, rng: &mut ThreadRng) -> Self {
-        // TODO: modulate individual particle color relative to base_color
-
         let moved = if particle_type.properties().moves {
             Some(false)
         } else {
@@ -344,7 +355,21 @@ impl Particle {
         for dxdy in dxdy_list.into_iter() {
             let r = api.random();
             let neighbour = api.neighbour_mut(dxdy);
-            let neighbour_flammability = neighbour.particle_type.properties().flammability;
+
+            // If our neighbour is watered (i.e. a watered fungus), we use its
+            // wet_flammability
+            let neighbour_flammability;
+            let watered = neighbour.watered.unwrap_or(false);
+            if !watered {
+                neighbour_flammability = neighbour.particle_type.properties().flammability;
+            } else {
+                neighbour_flammability = neighbour
+                    .particle_type
+                    .properties()
+                    .wet_flammability
+                    .unwrap();
+            }
+
             if neighbour_flammability > 0.0 && !neighbour.burning {
                 if neighbour_flammability * (1.0 - 0.5 * dxdy.1 as f32) > r {
                     neighbour.set_burning(true);
