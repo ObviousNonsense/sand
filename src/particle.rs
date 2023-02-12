@@ -2,21 +2,156 @@ use super::*;
 use ::rand::{rngs::ThreadRng, Rng};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-// #[repr(usize)]
+#[repr(usize)]
 pub enum ParticleType {
-    Empty,
-    Border,
-    Sand,
-    Water,
-    Concrete,
-    Steam,
-    Fungus,
-    Flame,
-    Methane,
-    Gunpowder,
-    Oil,
-    Wood,
+    Border = 0,
+    Concrete = 1,
+    Empty = 2,
+    Sand = 3,
+    Water = 4,
+    Steam = 5,
+    Fungus = 6,
+    Flame = 7,
+    Methane = 8,
+    Gunpowder = 9,
+    Oil = 10,
+    Wood = 11,
 }
+
+const PROPERTIES: [ParticleTypeProperties; 12] = [
+    // Border = 0
+    ParticleTypeProperties {
+        base_color: GRAY,
+        weight: f32::INFINITY,
+        moves: false,
+        fluid: false,
+        condensates: false,
+        flammability: 0.0,
+        wet_flammability: None,
+        base_fuel: None,
+    },
+    // Concrete = 1
+    ParticleTypeProperties {
+        base_color: GRAY,
+        weight: f32::INFINITY,
+        moves: false,
+        fluid: false,
+        condensates: false,
+        flammability: 0.0,
+        wet_flammability: None,
+        base_fuel: None,
+    },
+    // Empty = 2
+    ParticleTypeProperties {
+        base_color: Color::new(0.2, 0.2, 0.2, 1.0),
+        weight: 1.0,
+        moves: false,
+        fluid: false,
+        condensates: false,
+        flammability: 0.0,
+        wet_flammability: None,
+        base_fuel: None,
+    },
+    // Sand = 3
+    ParticleTypeProperties {
+        base_color: YELLOW,
+        weight: 90.0,
+        moves: true,
+        fluid: false,
+        condensates: false,
+        flammability: 0.0,
+        wet_flammability: None,
+        base_fuel: None,
+    },
+    // Water = 4
+    ParticleTypeProperties {
+        base_color: BLUE,
+        weight: 60.0,
+        moves: true,
+        fluid: true,
+        condensates: false,
+        flammability: 0.0,
+        wet_flammability: None,
+        base_fuel: None,
+    },
+    // Steam = 5
+    ParticleTypeProperties {
+        base_color: Color::new(0.753, 0.824, 0.949, 1.0),
+        weight: 0.5,
+        moves: true,
+        fluid: true,
+        condensates: true,
+        flammability: 0.0,
+        wet_flammability: None,
+        base_fuel: None,
+    },
+    // Fungus = 6
+    ParticleTypeProperties {
+        base_color: Color::new(0.41, 0.58, 0.51, 1.0),
+        weight: f32::INFINITY,
+        moves: false,
+        fluid: false,
+        condensates: false,
+        flammability: 0.125,
+        wet_flammability: Some(0.015),
+        base_fuel: Some(35),
+    },
+    // Flame = 7
+    ParticleTypeProperties {
+        base_color: Color::new(1.0, 0.47, 0.0, 1.0),
+        weight: f32::INFINITY,
+        moves: false,
+        fluid: false,
+        condensates: false,
+        flammability: 0.0,
+        wet_flammability: None,
+        base_fuel: Some(0),
+    },
+    // Methane = 8
+    ParticleTypeProperties {
+        base_color: Color::new(0.58, 0.47, 0.66, 1.0),
+        weight: 0.2,
+        moves: true,
+        fluid: true,
+        condensates: false,
+        flammability: 0.95,
+        wet_flammability: None,
+        base_fuel: Some(6),
+    },
+    // Gunpowder = 9
+    ParticleTypeProperties {
+        base_color: BLACK,
+        weight: 90.0,
+        moves: true,
+        fluid: false,
+        condensates: false,
+        flammability: 0.6,
+        wet_flammability: None,
+        base_fuel: Some(35),
+    },
+    // Oil = 10
+    ParticleTypeProperties {
+        base_color: Color::new(0.44, 0.34, 0.18, 1.0),
+        weight: 50.0,
+        moves: true,
+        fluid: true,
+        condensates: false,
+        flammability: 0.9,
+        wet_flammability: None,
+        base_fuel: Some(25),
+    },
+    // Wood = 11
+    ParticleTypeProperties {
+        base_color: Color::new(0.3, 0.22, 0.17, 1.0),
+        weight: f32::INFINITY,
+        moves: false,
+        fluid: false,
+        condensates: false,
+        flammability: 0.1,
+        wet_flammability: None,
+        base_fuel: Some(200),
+    },
+];
 
 #[derive(Debug, Clone, Copy)]
 // The immutable properties of a particle type
@@ -50,129 +185,7 @@ impl ParticleType {
     }
 
     pub const fn properties(&self) -> ParticleTypeProperties {
-        match self {
-            ParticleType::Border => ParticleTypeProperties {
-                base_color: GRAY,
-                weight: f32::INFINITY,
-                moves: false,
-                fluid: false,
-                condensates: false,
-                flammability: 0.0,
-                wet_flammability: None,
-                base_fuel: None,
-            },
-            ParticleType::Concrete => ParticleTypeProperties {
-                base_color: GRAY,
-                weight: f32::INFINITY,
-                moves: false,
-                fluid: false,
-                condensates: false,
-                flammability: 0.0,
-                wet_flammability: None,
-                base_fuel: None,
-            },
-            ParticleType::Empty => ParticleTypeProperties {
-                base_color: Color::new(0.2, 0.2, 0.2, 1.0),
-                weight: 1.0,
-                moves: false,
-                fluid: false,
-                condensates: false,
-                flammability: 0.0,
-                wet_flammability: None,
-                base_fuel: None,
-            },
-            ParticleType::Sand => ParticleTypeProperties {
-                base_color: YELLOW,
-                weight: 90.0,
-                moves: true,
-                fluid: false,
-                condensates: false,
-                flammability: 0.0,
-                wet_flammability: None,
-                base_fuel: None,
-            },
-            ParticleType::Water => ParticleTypeProperties {
-                base_color: BLUE,
-                weight: 60.0,
-                moves: true,
-                fluid: true,
-                condensates: false,
-                flammability: 0.0,
-                wet_flammability: None,
-                base_fuel: None,
-            },
-            ParticleType::Steam => ParticleTypeProperties {
-                base_color: Color::new(0.753, 0.824, 0.949, 1.0),
-                weight: 0.5,
-                moves: true,
-                fluid: true,
-                condensates: true,
-                flammability: 0.0,
-                wet_flammability: None,
-                base_fuel: None,
-            },
-            // TODO: Make two types: WateredFungus, Dry Fungus
-            ParticleType::Fungus => ParticleTypeProperties {
-                base_color: Color::new(0.41, 0.58, 0.51, 1.0),
-                weight: f32::INFINITY,
-                moves: false,
-                fluid: false,
-                condensates: false,
-                flammability: 0.125,
-                wet_flammability: Some(0.015),
-                base_fuel: Some(35),
-            },
-            ParticleType::Flame => ParticleTypeProperties {
-                base_color: Color::new(1.0, 0.47, 0.0, 1.0),
-                weight: f32::INFINITY,
-                moves: false,
-                fluid: false,
-                condensates: false,
-                flammability: 0.0,
-                wet_flammability: None,
-                base_fuel: Some(0),
-            },
-            ParticleType::Methane => ParticleTypeProperties {
-                base_color: Color::new(0.58, 0.47, 0.66, 1.0),
-                weight: 0.2,
-                moves: true,
-                fluid: true,
-                condensates: false,
-                flammability: 0.95,
-                wet_flammability: None,
-                base_fuel: Some(6),
-            },
-            ParticleType::Gunpowder => ParticleTypeProperties {
-                base_color: BLACK,
-                weight: 90.0,
-                moves: true,
-                fluid: false,
-                condensates: false,
-                flammability: 0.6,
-                wet_flammability: None,
-                base_fuel: Some(35),
-            },
-            ParticleType::Oil => ParticleTypeProperties {
-                base_color: Color::new(0.44, 0.34, 0.18, 1.0),
-                weight: 50.0,
-                moves: true,
-                fluid: true,
-                condensates: false,
-                flammability: 0.9,
-                wet_flammability: None,
-                base_fuel: Some(25),
-            },
-            ParticleType::Wood => ParticleTypeProperties {
-                base_color: Color::new(0.3, 0.22, 0.17, 1.0),
-                weight: f32::INFINITY,
-                moves: false,
-                fluid: false,
-                condensates: false,
-                flammability: 0.1,
-                wet_flammability: None,
-                base_fuel: Some(200),
-            },
-        }
+        PROPERTIES[*self as usize]
     }
 }
 
