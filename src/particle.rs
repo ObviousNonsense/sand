@@ -1,6 +1,20 @@
 use super::*;
 use ::rand::{rngs::ThreadRng, Rng};
 
+#[derive(Debug, Clone, Copy)]
+// The immutable properties of a particle type
+pub struct ParticleTypeProperties {
+    pub label: &'static str,
+    pub base_color: Color,
+    pub weight: f32,
+    pub moves: bool,
+    pub fluid: bool,
+    pub condensates: bool,
+    pub flammability: f32,
+    pub wet_flammability: Option<f32>,
+    pub base_fuel: Option<i16>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(usize)]
 pub enum ParticleType {
@@ -21,6 +35,7 @@ pub enum ParticleType {
 const PROPERTIES: [ParticleTypeProperties; 12] = [
     // Border = 0
     ParticleTypeProperties {
+        label: "Border",
         base_color: GRAY,
         weight: f32::INFINITY,
         moves: false,
@@ -32,6 +47,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Concrete = 1
     ParticleTypeProperties {
+        label: "Concrete",
         base_color: GRAY,
         weight: f32::INFINITY,
         moves: false,
@@ -43,6 +59,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Empty = 2
     ParticleTypeProperties {
+        label: "Empty",
         base_color: Color::new(0.2, 0.2, 0.2, 1.0),
         weight: 1.0,
         moves: false,
@@ -54,6 +71,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Sand = 3
     ParticleTypeProperties {
+        label: "Sand",
         base_color: YELLOW,
         weight: 90.0,
         moves: true,
@@ -65,6 +83,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Water = 4
     ParticleTypeProperties {
+        label: "Water",
         base_color: BLUE,
         weight: 60.0,
         moves: true,
@@ -76,6 +95,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Steam = 5
     ParticleTypeProperties {
+        label: "Steam",
         base_color: Color::new(0.753, 0.824, 0.949, 1.0),
         weight: 0.5,
         moves: true,
@@ -87,6 +107,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Fungus = 6
     ParticleTypeProperties {
+        label: "Fungus",
         base_color: Color::new(0.41, 0.58, 0.51, 1.0),
         weight: f32::INFINITY,
         moves: false,
@@ -98,6 +119,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Flame = 7
     ParticleTypeProperties {
+        label: "Flame",
         base_color: Color::new(1.0, 0.47, 0.0, 1.0),
         weight: f32::INFINITY,
         moves: false,
@@ -109,6 +131,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Methane = 8
     ParticleTypeProperties {
+        label: "Methane",
         base_color: Color::new(0.58, 0.47, 0.66, 1.0),
         weight: 0.2,
         moves: true,
@@ -120,6 +143,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Gunpowder = 9
     ParticleTypeProperties {
+        label: "Gunpowder",
         base_color: BLACK,
         weight: 90.0,
         moves: true,
@@ -131,6 +155,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Oil = 10
     ParticleTypeProperties {
+        label: "Oil",
         base_color: Color::new(0.44, 0.34, 0.18, 1.0),
         weight: 50.0,
         moves: true,
@@ -142,6 +167,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
     // Wood = 11
     ParticleTypeProperties {
+        label: "Wood",
         base_color: Color::new(0.3, 0.22, 0.17, 1.0),
         weight: f32::INFINITY,
         moves: false,
@@ -153,37 +179,7 @@ const PROPERTIES: [ParticleTypeProperties; 12] = [
     },
 ];
 
-#[derive(Debug, Clone, Copy)]
-// The immutable properties of a particle type
-pub struct ParticleTypeProperties {
-    pub base_color: Color,
-    pub weight: f32,
-    pub moves: bool,
-    pub fluid: bool,
-    pub condensates: bool,
-    pub flammability: f32,
-    pub wet_flammability: Option<f32>,
-    pub base_fuel: Option<i16>,
-}
-
 impl ParticleType {
-    pub fn label(&self) -> &str {
-        match self {
-            ParticleType::Empty => "Empty",
-            ParticleType::Border => "Border",
-            ParticleType::Sand => "Sand",
-            ParticleType::Water => "Water",
-            ParticleType::Concrete => "Concrete",
-            ParticleType::Steam => "Steam",
-            ParticleType::Fungus => "Fungus",
-            ParticleType::Flame => "Flame",
-            ParticleType::Methane => "Methane",
-            ParticleType::Gunpowder => "Gunpowder",
-            ParticleType::Oil => "Oil",
-            ParticleType::Wood => "Wood",
-        }
-    }
-
     pub const fn properties(&self) -> ParticleTypeProperties {
         PROPERTIES[*self as usize]
     }

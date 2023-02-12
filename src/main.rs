@@ -778,7 +778,7 @@ fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Sett
             ui.selectable_value(
                 &mut settings.placement_type,
                 ptype,
-                RichText::new(ptype.label())
+                RichText::new(ptype.properties().label)
                     .strong()
                     .monospace()
                     .background_color(egui::Color32::from_black_alpha(150)),
