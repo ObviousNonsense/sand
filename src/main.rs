@@ -17,8 +17,8 @@ const LIMIT_UPDATE_RATE: bool = false;
 fn window_conf() -> Conf {
     Conf {
         window_title: "Sand".to_owned(),
-        window_resizable: false,
-        high_dpi: true,
+        // window_resizable: false,
+        // high_dpi: true,
         sample_count: 0,
         ..Default::default()
     }
@@ -34,7 +34,7 @@ async fn main() {
         .cycle();
 
     let painter = Painter {
-        pixels_per_particle: 6.0,
+        pixels_per_particle: 4.0,
         world_px0: 225.0,
         world_py0: 0.0,
     };

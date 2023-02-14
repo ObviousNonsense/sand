@@ -26,6 +26,8 @@
     <!-- Your compiled wasm file -->
     <!-- <script>load("target/wasm32-unknown-unknown/debug/sand.wasm");</script> -->
     <!-- <script>load("target/wasm32-unknown-unknown/release/sand.wasm");</script> -->
+    <!-- cargo build --target wasm32-unknown-unknown --release -->
+    <!-- wasm-opt -O3 -o sand-opt.wasm target/wasm32-unknown-unknown/release/sand.wasm -->
     <script>load("sand-opt.wasm");</script>
 </body>
 
