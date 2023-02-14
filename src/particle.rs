@@ -398,14 +398,15 @@ impl Particle {
     //     }
     // }
 
-    pub fn draw(&self, x: usize, y: usize, painter: &Painter) {
-        painter.draw_particle(x, y, self.color);
-    }
+    // pub fn draw(&self, x: usize, y: usize, painter: &mut Painter) {
+    //     // painter.draw_particle(x, y, self.color);
+    //     painter.update_image_with_particle(x, y, self.color);
+    // }
 
-    pub fn draw_and_refresh(&mut self, x: usize, y: usize, painter: &Painter) {
-        self.refresh();
-        self.draw(x, y, painter);
-    }
+    // pub fn draw_and_refresh(&mut self, x: usize, y: usize, painter: &mut Painter) {
+    //     self.refresh();
+    //     self.draw(x, y, painter);
+    // }
 }
 
 // pub fn draw_particle(x: usize, y: usize, color: Color) {

@@ -33,10 +33,37 @@ async fn main() {
         .into_iter()
         .cycle();
 
+    let world_height = 500;
+    let world_width = 500;
+    let pixels_per_particle = 2;
+    // let bytes: Vec<u8> = std::iter::repeat(255)
+    //     .take(4 * pixels_per_particle * pixels_per_particle)
+    //     .collect();
+
+    // Okay, the plan: instead of storing
+    // Texture2D::from_bytes
+    // let screen_image = Image::gen_image_color(
+    //     (pixels_per_particle * world_width) as u16,
+    //     (pixels_per_particle * world_width) as u16,
+    //     WHITE,
+    // );
+
+    // let pixel_width = pixels_per_particle * world_width;
+
+    let screen_buffer: Vec<u8> = std::iter::repeat(255)
+        .take(4 * world_width * world_height)
+        .collect();
+
     let painter = Painter {
-        pixels_per_particle: 4.0,
+        pixels_per_particle: pixels_per_particle as f32,
         world_px0: 225.0,
         world_py0: 0.0,
+        screen_buffer: screen_buffer.clone(),
+        // screen_texture: Texture2D::from_rgba8(
+        //     (pixels_per_particle * world_width) as u16,
+        //     (pixels_per_particle * world_width) as u16,
+        //     &screen_buffer,
+        // ),
     };
 
     let mut settings = Settings {
@@ -57,7 +84,7 @@ async fn main() {
         portal_placement_valid: true,
         portal_color_cycle: color_cycle,
         new_pixels_per_particle: painter.pixels_per_particle,
-        new_size: (150, 150),
+        new_size: (world_width, world_height),
         painter,
     };
 
@@ -73,7 +100,7 @@ async fn main() {
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
         // clear_background(BLACK);
-        world.draw_and_reset_all_particles(&settings.painter);
+        world.draw_and_reset_all_particles(&mut settings.painter);
         // ─────────────────────────────────────────────────────────────────────────
 
         // ─── Input ───────────────────────────────────────────────────────────────
@@ -157,6 +184,11 @@ pub struct Painter {
     world_px0: f32,
     world_py0: f32,
     pixels_per_particle: f32,
+    screen_buffer: Vec<u8>,
+    // particle_texture: Texture2D,
+    // screen_image: Image,
+    // screen_texture: Texture2D,
+    // pixel_width: f32,
 }
 
 impl Painter {
@@ -211,6 +243,49 @@ impl Painter {
             self.pixels_per_particle,
             color,
         );
+        // draw_texture(self.particle_texture, px, py, color);
+    }
+
+    fn update_image_with_particle(&mut self, x: usize, y: usize, width: usize, color: Color) {
+        // let (px, py) = self.xy_to_pixels(x, y);
+        // let imgpx = (px - self.world_px0) as u32;
+        // let imgpy = (py - self.world_py0) as u32;
+
+        let idx = x + y * width;
+        // dbg!(x);
+        // dbg!(y);
+        // dbg!(idx);
+        // dbg!(color);
+        let bytes = [
+            (255.0 * color.r) as u8,
+            (255.0 * color.g) as u8,
+            (255.0 * color.b) as u8,
+            (255.0 * color.a) as u8,
+        ];
+        // dbg!(bytes);
+
+        // dbg!(&self.screen_buffer[(4 * idx)..(4 * (idx + 1))]);
+        self.screen_buffer.splice((4 * idx)..(4 * (idx + 1)), bytes);
+        // dbg!(&self.screen_buffer[(4 * idx)..(4 * (idx + 1))]);
+    }
+
+    fn draw_screen(&self, world_width: usize, world_height: usize) {
+        let tex =
+            Texture2D::from_rgba8(world_width as u16, world_height as u16, &self.screen_buffer);
+        tex.set_filter(FilterMode::Nearest);
+        draw_texture_ex(
+            tex,
+            self.world_px0,
+            self.world_py0,
+            WHITE,
+            DrawTextureParams {
+                dest_size: Some(Vec2::new(
+                    self.pixels_per_particle * world_width as f32,
+                    self.pixels_per_particle * world_height as f32,
+                )),
+                ..Default::default()
+            },
+        )
     }
 
     fn draw_source(&self, x: usize, y: usize, color: Color, replaces: bool, sink: bool) {
@@ -344,7 +419,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
 
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
-        world.draw_and_reset_all_particles(&settings.painter);
+        world.draw_and_reset_all_particles(&mut settings.painter);
         world.update_all();
     }
     // Pause/Unpause with space
