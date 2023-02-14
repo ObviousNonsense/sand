@@ -36,35 +36,18 @@ async fn main() {
     let world_height = 500;
     let world_width = 500;
     let pixels_per_particle = 2;
-    // let bytes: Vec<u8> = std::iter::repeat(255)
-    //     .take(4 * pixels_per_particle * pixels_per_particle)
+
+    // let screen_buffer: Vec<u8> = std::iter::repeat(255)
+    //     .take(4 * world_width * world_height)
     //     .collect();
 
-    // Okay, the plan: instead of storing
-    // Texture2D::from_bytes
-    // let screen_image = Image::gen_image_color(
-    //     (pixels_per_particle * world_width) as u16,
-    //     (pixels_per_particle * world_width) as u16,
-    //     WHITE,
-    // );
-
-    // let pixel_width = pixels_per_particle * world_width;
-
-    let screen_buffer: Vec<u8> = std::iter::repeat(255)
-        .take(4 * world_width * world_height)
-        .collect();
-
-    let painter = Painter {
-        pixels_per_particle: pixels_per_particle as f32,
-        world_px0: 225.0,
-        world_py0: 0.0,
-        screen_buffer: screen_buffer.clone(),
-        // screen_texture: Texture2D::from_rgba8(
-        //     (pixels_per_particle * world_width) as u16,
-        //     (pixels_per_particle * world_width) as u16,
-        //     &screen_buffer,
-        // ),
-    };
+    let painter = Painter::new(
+        225.0,
+        0.0,
+        pixels_per_particle as f32,
+        world_width,
+        world_height,
+    );
 
     let mut settings = Settings {
         paused: false,
@@ -164,6 +147,14 @@ struct Settings {
 
 impl Settings {
     fn resize_world_and_screen(&mut self) -> World {
+        self.painter = Painter::new(
+            self.painter.world_px0,
+            self.painter.world_py0,
+            self.new_pixels_per_particle,
+            self.new_size.0,
+            self.new_size.1,
+        );
+
         self.painter.pixels_per_particle = self.new_pixels_per_particle;
         // Something wrong with this on Mac for some reason. But also without it the
         // display is wrong on windows when the 4k monitor with 150% scaling is the
@@ -185,13 +176,28 @@ pub struct Painter {
     world_py0: f32,
     pixels_per_particle: f32,
     screen_buffer: Vec<u8>,
-    // particle_texture: Texture2D,
-    // screen_image: Image,
-    // screen_texture: Texture2D,
-    // pixel_width: f32,
 }
 
 impl Painter {
+    fn new(
+        world_px0: f32,
+        world_py0: f32,
+        pixels_per_particle: f32,
+        world_width: usize,
+        world_height: usize,
+    ) -> Self {
+        let screen_buffer: Vec<u8> = std::iter::repeat(255)
+            .take(4 * world_width * world_height)
+            .collect();
+
+        Self {
+            world_px0,
+            world_py0,
+            pixels_per_particle,
+            screen_buffer,
+        }
+    }
+
     fn pixels_to_xy<T: From<f32>>(&self, px: f32, py: f32) -> (T, T) {
         (
             ((px - self.world_px0) / self.pixels_per_particle).into(),
@@ -247,26 +253,18 @@ impl Painter {
     }
 
     fn update_image_with_particle(&mut self, x: usize, y: usize, width: usize, color: Color) {
-        // let (px, py) = self.xy_to_pixels(x, y);
-        // let imgpx = (px - self.world_px0) as u32;
-        // let imgpy = (py - self.world_py0) as u32;
-
         let idx = x + y * width;
-        // dbg!(x);
-        // dbg!(y);
-        // dbg!(idx);
-        // dbg!(color);
         let bytes = [
             (255.0 * color.r) as u8,
             (255.0 * color.g) as u8,
             (255.0 * color.b) as u8,
             (255.0 * color.a) as u8,
         ];
-        // dbg!(bytes);
 
-        // dbg!(&self.screen_buffer[(4 * idx)..(4 * (idx + 1))]);
-        self.screen_buffer.splice((4 * idx)..(4 * (idx + 1)), bytes);
-        // dbg!(&self.screen_buffer[(4 * idx)..(4 * (idx + 1))]);
+        for (n, m) in ((4 * idx)..(4 * (idx + 1))).zip(0..4) {
+            self.screen_buffer[n] = bytes[m];
+        }
+        // self.screen_buffer.splice((4 * idx)..(4 * (idx + 1)), bytes);
     }
 
     fn draw_screen(&self, world_width: usize, world_height: usize) {
