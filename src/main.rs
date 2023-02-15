@@ -33,9 +33,9 @@ async fn main() {
         .into_iter()
         .cycle();
 
-    let world_height = 500;
-    let world_width = 500;
-    let pixels_per_particle = 2;
+    let world_height = 250;
+    let world_width = 250;
+    let pixels_per_particle = 4;
 
     // let screen_buffer: Vec<u8> = std::iter::repeat(255)
     //     .take(4 * world_width * world_height)
@@ -252,18 +252,17 @@ impl Painter {
         // draw_texture(self.particle_texture, px, py, color);
     }
 
-    fn update_image_with_particle(&mut self, x: usize, y: usize, width: usize, color: Color) {
+    fn update_image_with_particle(&mut self, x: usize, y: usize, width: usize, color: PColor) {
         let idx = x + y * width;
-        let bytes = [
-            (255.0 * color.r) as u8,
-            (255.0 * color.g) as u8,
-            (255.0 * color.b) as u8,
-            (255.0 * color.a) as u8,
-        ];
 
-        for (n, m) in ((4 * idx)..(4 * (idx + 1))).zip(0..4) {
-            self.screen_buffer[n] = bytes[m];
-        }
+        self.screen_buffer[4 * idx] = color.r;
+        self.screen_buffer[4 * idx + 1] = color.g;
+        self.screen_buffer[4 * idx + 2] = color.b;
+        // self.screen_buffer[4 * idx] = 255;
+
+        // for (n, m) in ((4 * idx)..(4 * (idx + 1))).zip(0..4) {
+        //     self.screen_buffer[n] = bytes[m];
+        // }
         // self.screen_buffer.splice((4 * idx)..(4 * (idx + 1)), bytes);
     }
 
@@ -448,12 +447,12 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
 fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mousey: usize) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
-            let mut color = settings.placement_type.properties().base_color;
+            let mut color: Color = settings.placement_type.properties().base_color.into();
             color.a = 0.4;
             settings.painter.draw_particle(x, y, color);
         }
         PlaceableSelector::Source => {
-            let mut color = settings.placement_type.properties().base_color;
+            let mut color: Color = settings.placement_type.properties().base_color.into();
             color.a = 0.4;
             color.r -= 0.1;
             color.g -= 0.1;
@@ -463,7 +462,7 @@ fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mouse
                 .draw_source(x, y, color, settings.sources_replace, false);
         }
         PlaceableSelector::Sink => {
-            let mut color = settings.placement_type.properties().base_color;
+            let mut color: Color = settings.placement_type.properties().base_color.into();
             color.a = 0.4;
             color.r -= 0.1;
             color.g -= 0.1;
@@ -846,7 +845,7 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
 fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Settings) {
     // ui.selectable_value(&mut settings.placement_type, ptype, "");
     egui::Frame::none()
-        .fill(ptype.properties().base_color.to_egui())
+        .fill(ptype.properties().base_color.into())
         .show(ui, |ui| {
             // ui.label("");
             ui.selectable_value(
@@ -860,6 +859,36 @@ fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Sett
             // ui.label("");
             // ui.allocate_space(ui.available_size());
         });
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PColor {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+impl PColor {
+    const fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
+    }
+}
+
+impl From<PColor> for Color {
+    fn from(value: PColor) -> Self {
+        Color::new(
+            value.r as f32 / 255.0,
+            value.g as f32 / 255.0,
+            value.b as f32 / 255.0,
+            1.0,
+        )
+    }
+}
+
+impl From<PColor> for egui::Color32 {
+    fn from(value: PColor) -> Self {
+        egui::Color32::from_rgb(value.r, value.g, value.b)
+    }
 }
 
 trait ToEguiColor {

@@ -14,7 +14,7 @@ struct ParticleSource {
 
 impl ParticleSource {
     fn draw(&self, x: usize, y: usize, painter: &Painter) {
-        let mut color = self.particle_type.properties().base_color;
+        let mut color: Color = self.particle_type.properties().base_color.into();
         color.a = 0.5;
         color.r -= 0.1;
         color.g -= 0.1;

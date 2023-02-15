@@ -5,7 +5,7 @@ use ::rand::{rngs::ThreadRng, Rng};
 // The immutable properties of a particle type
 pub struct ParticleTypeProperties {
     pub label: &'static str,
-    pub base_color: Color,
+    pub base_color: PColor,
     pub weight: f32,
     pub moves: bool,
     pub auto_move: bool,
@@ -39,7 +39,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Border = 0
     ParticleTypeProperties {
         label: "Border",
-        base_color: GRAY,
+        base_color: PColor::new(129, 129, 129),
         weight: f32::INFINITY,
         moves: false,
         auto_move: false,
@@ -53,7 +53,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Concrete = 1
     ParticleTypeProperties {
         label: "Concrete",
-        base_color: GRAY,
+        base_color: PColor::new(129, 129, 129),
         weight: f32::INFINITY,
         moves: false,
         auto_move: false,
@@ -67,7 +67,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Empty = 2
     ParticleTypeProperties {
         label: "Empty",
-        base_color: Color::new(0.2, 0.2, 0.2, 1.0),
+        base_color: PColor::new(51, 51, 51),
         weight: 1.0,
         moves: false,
         auto_move: false,
@@ -81,7 +81,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Sand = 3
     ParticleTypeProperties {
         label: "Sand",
-        base_color: YELLOW,
+        base_color: PColor::new(251, 250, 74),
         weight: 90.0,
         moves: true,
         auto_move: true,
@@ -95,7 +95,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Water = 4
     ParticleTypeProperties {
         label: "Water",
-        base_color: BLUE,
+        base_color: PColor::new(8, 116, 236),
         weight: 60.0,
         moves: true,
         auto_move: true,
@@ -109,7 +109,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Steam = 5
     ParticleTypeProperties {
         label: "Steam",
-        base_color: Color::new(0.753, 0.824, 0.949, 1.0),
+        base_color: PColor::new(192, 209, 239),
         weight: 0.5,
         moves: true,
         auto_move: false,
@@ -123,7 +123,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Fungus = 6
     ParticleTypeProperties {
         label: "Fungus",
-        base_color: Color::new(0.41, 0.58, 0.51, 1.0),
+        base_color: PColor::new(103, 147, 131),
         weight: f32::INFINITY,
         moves: false,
         auto_move: false,
@@ -137,7 +137,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Flame = 7
     ParticleTypeProperties {
         label: "Flame",
-        base_color: Color::new(1.0, 0.47, 0.0, 1.0),
+        base_color: PColor::new(255, 123, 36),
         weight: f32::INFINITY,
         moves: false,
         auto_move: false,
@@ -151,7 +151,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Methane = 8
     ParticleTypeProperties {
         label: "Methane",
-        base_color: Color::new(0.58, 0.47, 0.66, 1.0),
+        base_color: PColor::new(148, 119, 165),
         weight: 0.2,
         moves: true,
         auto_move: true,
@@ -165,7 +165,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Gunpowder = 9
     ParticleTypeProperties {
         label: "Gunpowder",
-        base_color: BLACK,
+        base_color: PColor::new(0, 0, 0),
         weight: 90.0,
         moves: true,
         auto_move: true,
@@ -179,7 +179,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Oil = 10
     ParticleTypeProperties {
         label: "Oil",
-        base_color: Color::new(0.44, 0.34, 0.18, 1.0),
+        base_color: PColor::new(112, 87, 50),
         weight: 50.0,
         moves: true,
         auto_move: true,
@@ -193,7 +193,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Wood = 11
     ParticleTypeProperties {
         label: "Wood",
-        base_color: Color::new(0.3, 0.22, 0.17, 1.0),
+        base_color: PColor::new(87, 56, 46),
         weight: f32::INFINITY,
         moves: false,
         auto_move: false,
@@ -207,7 +207,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Acid = 12
     ParticleTypeProperties {
         label: "Acid",
-        base_color: Color::new(0.67, 0.98, 0.25, 1.0),
+        base_color: PColor::new(166, 249, 94),
         weight: 63.0,
         moves: true,
         auto_move: false,
@@ -259,8 +259,8 @@ impl Deleted {
 pub struct Particle {
     pub particle_type: ParticleType,
     pub updated: bool,
-    pub color: Color,
-    original_color: Color,
+    pub color: PColor,
+    original_color: PColor,
     burning: bool,
     moved: Option<bool>,
     moving_right: Option<bool>,
@@ -308,16 +308,17 @@ impl Particle {
         let fuel = particle_type.properties().base_fuel;
         let durability = particle_type.properties().base_durability;
 
-        let color = if particle_type == ParticleType::Empty {
-            particle_type.properties().base_color
-        } else {
-            scale_hsl_of_color(
-                particle_type.properties().base_color,
-                1.0,
-                rng.gen_range(0.94..1.06),
-                rng.gen_range(0.98..1.02),
-            )
-        };
+        let color = particle_type.properties().base_color;
+        // let color = if particle_type == ParticleType::Empty {
+        //     particle_type.properties().base_color
+        // } else {
+        //     scale_hsl_of_color(
+        //         particle_type.properties().base_color,
+        //         1.0,
+        //         rng.gen_range(0.94..1.06),
+        //         rng.gen_range(0.98..1.02),
+        //     )
+        // };
 
         Self {
             particle_type,
@@ -397,22 +398,7 @@ impl Particle {
     //         unreachable!("Called set_moved on non-movable particle {:?}", self);
     //     }
     // }
-
-    // pub fn draw(&self, x: usize, y: usize, painter: &mut Painter) {
-    //     // painter.draw_particle(x, y, self.color);
-    //     painter.update_image_with_particle(x, y, self.color);
-    // }
-
-    // pub fn draw_and_refresh(&mut self, x: usize, y: usize, painter: &mut Painter) {
-    //     self.refresh();
-    //     self.draw(x, y, painter);
-    // }
 }
-
-// pub fn draw_particle(x: usize, y: usize, color: Color) {
-//     let (px, py) = xy_to_pixels(x, y);
-//     draw_rectangle(px, py, PIXELS_PER_PARTICLE, PIXELS_PER_PARTICLE, color);
-// }
 
 impl Particle {
     fn set_burning(&mut self, b: bool) {
@@ -423,7 +409,7 @@ impl Particle {
     }
 
     fn burn(&mut self, api: &mut WorldApi) -> Deleted {
-        self.color = Particle::burning_flicker_color(api);
+        // self.color = Particle::burning_flicker_color(api);
 
         let dxdy_list = vec![(0, -1), (1, 0), (-1, 0), (0, 1)];
 
@@ -471,21 +457,21 @@ impl Particle {
         Deleted::False
     }
 
-    fn burning_flicker_color(api: &mut WorldApi) -> Color {
-        scale_hsl_of_color(
-            ParticleType::Flame.properties().base_color,
-            api.random_range(0.95..1.05),
-            api.random_range(0.95..1.05),
-            api.random_range(0.95..1.05),
-        )
-    }
+    // fn burning_flicker_color(api: &mut WorldApi) -> Color {
+    //     scale_hsl_of_color(
+    //         ParticleType::Flame.properties().base_color,
+    //         api.random_range(0.95..1.05),
+    //         api.random_range(0.95..1.05),
+    //         api.random_range(0.95..1.05),
+    //     )
+    // }
 }
 
 /// Fungus (plant?) methods
 impl Particle {
     fn set_watered(&mut self, w: bool) {
         if w {
-            self.color = scale_hsl_of_color(self.original_color, 1.1, 1.7, 1.0);
+            // self.color = scale_hsl_of_color(self.original_color, 1.1, 1.7, 1.0);
         } else {
             self.color = self.original_color;
         }
@@ -654,20 +640,16 @@ impl Particle {
     /// Checks if this particle can and will move in the given direction.
     /// Assumes that if it can move there it will (sets self.moved to true)
     fn try_moving_to(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> bool {
-        let rand_factor = api.random::<f32>();
-        let mut other_p = api.neighbour_mut(dxdy);
-        let my_weight = self.particle_type.properties().weight;
-        let other_weight = other_p.particle_type.properties().weight;
-
-        let weight_check = (!self.rises() && (my_weight * rand_factor > other_weight))
-            || (self.rises() && (other_weight * rand_factor > my_weight));
+        // let rand_factor = api.random::<f32>();
+        let other_p = api.neighbour(dxdy);
+        let other_weight = api.neighbour(dxdy).particle_type.properties().weight;
 
         let other_empty = other_p.particle_type == ParticleType::Empty;
 
         // If the other position is empty, try moving into it
         if other_empty {
             // If we're moving sideways don't compare weights, just do it
-            if dxdy.1 == 0 || weight_check {
+            if dxdy.1 == 0 || self.weight_check(api, other_weight) {
                 self.moved = Some(true);
                 api.swap_with(dxdy);
                 return true;
@@ -675,13 +657,21 @@ impl Particle {
         } else if other_p.particle_type.properties().moves && !other_p.moved.unwrap() {
             // If there's something there and it's moveable and it hasn't
             // already moved, then we might swap with it
-            if weight_check {
-                other_p.moved = Some(true);
+            if self.weight_check(api, other_weight) {
+                let other_p_mut = api.neighbour_mut(dxdy);
+                other_p_mut.moved = Some(true);
                 self.moved = Some(true);
                 api.swap_with(dxdy);
                 return true;
             }
         }
         false
+    }
+
+    fn weight_check(&self, api: &mut WorldApi, other_weight: f32) -> bool {
+        (!self.rises()
+            && (self.particle_type.properties().weight * api.random::<f32>() > other_weight))
+            || (self.rises()
+                && (other_weight * api.random::<f32>() > self.particle_type.properties().weight))
     }
 }
