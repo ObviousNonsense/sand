@@ -33,8 +33,8 @@ async fn main() {
         .into_iter()
         .cycle();
 
-    let world_height = 250;
-    let world_width = 250;
+    let world_height = 150;
+    let world_width = 150;
     let pixels_per_particle = 4;
 
     // let screen_buffer: Vec<u8> = std::iter::repeat(255)
