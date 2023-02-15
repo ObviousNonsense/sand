@@ -14,7 +14,7 @@ struct ParticleSource {
 
 impl ParticleSource {
     fn draw(&self, x: usize, y: usize, painter: &Painter) {
-        let mut color = self.particle_type.properties().base_color;
+        let mut color: Color = self.particle_type.properties().base_color.into();
         color.a = 0.5;
         color.r -= 0.1;
         color.g -= 0.1;
@@ -296,10 +296,17 @@ impl World {
     }
 
     // ─── Other ───────────────────────────────────────────────────────────────────────────
-    pub fn draw_and_reset_all_particles(&mut self, painter: &Painter) {
-        for x in 0..self.width {
-            for y in 0..self.height {
-                self.particle_grid[(x, y)].draw_and_refresh(x, y, painter);
+    pub fn draw_and_reset_all_particles(&mut self, painter: &mut Painter) {
+        for y in 0..self.height {
+            for x in 0..self.width {
+                // self.particle_grid[(x, y)].draw_and_refresh(x, y, painter);
+                self.particle_grid[(x, y)].refresh();
+                painter.update_image_with_particle(
+                    x,
+                    y,
+                    self.width,
+                    self.particle_grid[(x, y)].color,
+                );
                 if let Some(portal) = &self.portal_grid[(x, y)] {
                     portal.draw(x, y, painter);
                 }
@@ -308,6 +315,9 @@ impl World {
                 }
             }
         }
+        // dbg!(&painter.screen_buffer);
+        // painter.screen_texture.update(&painter.screen_image);
+        painter.draw_screen(self.width, self.height);
     }
 
     // TODO: Consider pre-calculating this and storing it as a vector

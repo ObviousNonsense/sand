@@ -33,11 +33,21 @@ async fn main() {
         .into_iter()
         .cycle();
 
-    let painter = Painter {
-        pixels_per_particle: 4.0,
-        world_px0: 225.0,
-        world_py0: 0.0,
-    };
+    let world_height = 250;
+    let world_width = 250;
+    let pixels_per_particle = 4;
+
+    // let screen_buffer: Vec<u8> = std::iter::repeat(255)
+    //     .take(4 * world_width * world_height)
+    //     .collect();
+
+    let painter = Painter::new(
+        225.0,
+        0.0,
+        pixels_per_particle as f32,
+        world_width,
+        world_height,
+    );
 
     let mut settings = Settings {
         paused: false,
@@ -57,7 +67,7 @@ async fn main() {
         portal_placement_valid: true,
         portal_color_cycle: color_cycle,
         new_pixels_per_particle: painter.pixels_per_particle,
-        new_size: (150, 150),
+        new_size: (world_width, world_height),
         painter,
     };
 
@@ -73,7 +83,7 @@ async fn main() {
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
         // clear_background(BLACK);
-        world.draw_and_reset_all_particles(&settings.painter);
+        world.draw_and_reset_all_particles(&mut settings.painter);
         // ─────────────────────────────────────────────────────────────────────────
 
         // ─── Input ───────────────────────────────────────────────────────────────
@@ -137,6 +147,14 @@ struct Settings {
 
 impl Settings {
     fn resize_world_and_screen(&mut self) -> World {
+        self.painter = Painter::new(
+            self.painter.world_px0,
+            self.painter.world_py0,
+            self.new_pixels_per_particle,
+            self.new_size.0,
+            self.new_size.1,
+        );
+
         self.painter.pixels_per_particle = self.new_pixels_per_particle;
         // Something wrong with this on Mac for some reason. But also without it the
         // display is wrong on windows when the 4k monitor with 150% scaling is the
@@ -157,9 +175,29 @@ pub struct Painter {
     world_px0: f32,
     world_py0: f32,
     pixels_per_particle: f32,
+    screen_buffer: Vec<u8>,
 }
 
 impl Painter {
+    fn new(
+        world_px0: f32,
+        world_py0: f32,
+        pixels_per_particle: f32,
+        world_width: usize,
+        world_height: usize,
+    ) -> Self {
+        let screen_buffer: Vec<u8> = std::iter::repeat(255)
+            .take(4 * world_width * world_height)
+            .collect();
+
+        Self {
+            world_px0,
+            world_py0,
+            pixels_per_particle,
+            screen_buffer,
+        }
+    }
+
     fn pixels_to_xy<T: From<f32>>(&self, px: f32, py: f32) -> (T, T) {
         (
             ((px - self.world_px0) / self.pixels_per_particle).into(),
@@ -211,6 +249,40 @@ impl Painter {
             self.pixels_per_particle,
             color,
         );
+        // draw_texture(self.particle_texture, px, py, color);
+    }
+
+    fn update_image_with_particle(&mut self, x: usize, y: usize, width: usize, color: PColor) {
+        let idx = x + y * width;
+
+        self.screen_buffer[4 * idx] = color.r;
+        self.screen_buffer[4 * idx + 1] = color.g;
+        self.screen_buffer[4 * idx + 2] = color.b;
+        // self.screen_buffer[4 * idx] = 255;
+
+        // for (n, m) in ((4 * idx)..(4 * (idx + 1))).zip(0..4) {
+        //     self.screen_buffer[n] = bytes[m];
+        // }
+        // self.screen_buffer.splice((4 * idx)..(4 * (idx + 1)), bytes);
+    }
+
+    fn draw_screen(&self, world_width: usize, world_height: usize) {
+        let tex =
+            Texture2D::from_rgba8(world_width as u16, world_height as u16, &self.screen_buffer);
+        tex.set_filter(FilterMode::Nearest);
+        draw_texture_ex(
+            tex,
+            self.world_px0,
+            self.world_py0,
+            WHITE,
+            DrawTextureParams {
+                dest_size: Some(Vec2::new(
+                    self.pixels_per_particle * world_width as f32,
+                    self.pixels_per_particle * world_height as f32,
+                )),
+                ..Default::default()
+            },
+        )
     }
 
     fn draw_source(&self, x: usize, y: usize, color: Color, replaces: bool, sink: bool) {
@@ -344,7 +416,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
 
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
-        world.draw_and_reset_all_particles(&settings.painter);
+        world.draw_and_reset_all_particles(&mut settings.painter);
         world.update_all();
     }
     // Pause/Unpause with space
@@ -375,12 +447,12 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
 fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mousey: usize) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
-            let mut color = settings.placement_type.properties().base_color;
+            let mut color: Color = settings.placement_type.properties().base_color.into();
             color.a = 0.4;
             settings.painter.draw_particle(x, y, color);
         }
         PlaceableSelector::Source => {
-            let mut color = settings.placement_type.properties().base_color;
+            let mut color: Color = settings.placement_type.properties().base_color.into();
             color.a = 0.4;
             color.r -= 0.1;
             color.g -= 0.1;
@@ -390,7 +462,7 @@ fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mouse
                 .draw_source(x, y, color, settings.sources_replace, false);
         }
         PlaceableSelector::Sink => {
-            let mut color = settings.placement_type.properties().base_color;
+            let mut color: Color = settings.placement_type.properties().base_color.into();
             color.a = 0.4;
             color.r -= 0.1;
             color.g -= 0.1;
@@ -773,7 +845,7 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
 fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Settings) {
     // ui.selectable_value(&mut settings.placement_type, ptype, "");
     egui::Frame::none()
-        .fill(ptype.properties().base_color.to_egui())
+        .fill(ptype.properties().base_color.into())
         .show(ui, |ui| {
             // ui.label("");
             ui.selectable_value(
@@ -787,6 +859,23 @@ fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Sett
             // ui.label("");
             // ui.allocate_space(ui.available_size());
         });
+}
+
+impl From<PColor> for Color {
+    fn from(value: PColor) -> Self {
+        Color::new(
+            value.r as f32 / 255.0,
+            value.g as f32 / 255.0,
+            value.b as f32 / 255.0,
+            1.0,
+        )
+    }
+}
+
+impl From<PColor> for egui::Color32 {
+    fn from(value: PColor) -> Self {
+        egui::Color32::from_rgb(value.r, value.g, value.b)
+    }
 }
 
 trait ToEguiColor {
