@@ -680,7 +680,7 @@ impl PColor {
     // ChatGPT wrote these methods. "The formula used in the implementation is
     // based on the description provided in the Wikipedia article on HSL and
     // HSV."
-    fn into_hsv(&self) -> (f32, f32, f32) {
+    fn into_hsv(self) -> (f32, f32, f32) {
         let r = self.r as f32 / 255.0;
         let g = self.g as f32 / 255.0;
         let b = self.b as f32 / 255.0;
@@ -728,8 +728,8 @@ impl PColor {
     fn scale_hsv(&self, rotate_h: f32, scale_s: f32, scale_v: f32) -> Self {
         let (h, s, v) = self.into_hsv();
         let h = (h + rotate_h) % 360.0;
-        let s = (s * scale_s).max(0.0).min(1.0);
-        let v = (v * scale_v).max(0.0).min(1.0);
+        let s = (s * scale_s).clamp(0.0, 1.0);
+        let v = (v * scale_v).clamp(0.0, 1.0);
         PColor::from_hsv(h, s, v)
     }
 }
