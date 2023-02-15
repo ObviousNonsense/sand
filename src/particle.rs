@@ -226,15 +226,6 @@ impl ParticleType {
     }
 }
 
-fn scale_hsl_of_color(c: Color, scale_h: f32, scale_s: f32, scale_l: f32) -> Color {
-    let color_hsl = rgb_to_hsl(c);
-    hsl_to_rgb(
-        color_hsl.0 * scale_h,
-        color_hsl.1 * scale_s,
-        color_hsl.2 * scale_l,
-    )
-}
-
 #[derive(PartialEq)]
 enum Deleted {
     True,
@@ -308,17 +299,16 @@ impl Particle {
         let fuel = particle_type.properties().base_fuel;
         let durability = particle_type.properties().base_durability;
 
-        let color = particle_type.properties().base_color;
-        // let color = if particle_type == ParticleType::Empty {
-        //     particle_type.properties().base_color
-        // } else {
-        //     scale_hsl_of_color(
-        //         particle_type.properties().base_color,
-        //         1.0,
-        //         rng.gen_range(0.94..1.06),
-        //         rng.gen_range(0.98..1.02),
-        //     )
-        // };
+        // let color = particle_type.properties().base_color;
+        let color = if particle_type == ParticleType::Empty {
+            particle_type.properties().base_color
+        } else {
+            particle_type.properties().base_color.scale_hsv(
+                0.0,
+                rng.gen_range(0.94..1.06),
+                rng.gen_range(0.98..1.02),
+            )
+        };
 
         Self {
             particle_type,
@@ -409,7 +399,7 @@ impl Particle {
     }
 
     fn burn(&mut self, api: &mut WorldApi) -> Deleted {
-        // self.color = Particle::burning_flicker_color(api);
+        self.color = Particle::burning_flicker_color(api);
 
         let dxdy_list = vec![(0, -1), (1, 0), (-1, 0), (0, 1)];
 
@@ -457,21 +447,20 @@ impl Particle {
         Deleted::False
     }
 
-    // fn burning_flicker_color(api: &mut WorldApi) -> Color {
-    //     scale_hsl_of_color(
-    //         ParticleType::Flame.properties().base_color,
-    //         api.random_range(0.95..1.05),
-    //         api.random_range(0.95..1.05),
-    //         api.random_range(0.95..1.05),
-    //     )
-    // }
+    fn burning_flicker_color(api: &mut WorldApi) -> PColor {
+        ParticleType::Flame.properties().base_color.scale_hsv(
+            api.random_range(-15.0..15.0),
+            api.random_range(0.95..1.05),
+            api.random_range(0.9..1.1),
+        )
+    }
 }
 
 /// Fungus (plant?) methods
 impl Particle {
     fn set_watered(&mut self, w: bool) {
         if w {
-            // self.color = scale_hsl_of_color(self.original_color, 1.1, 1.7, 1.0);
+            self.color = self.original_color.scale_hsv(10.0, 1.7, 1.0);
         } else {
             self.color = self.original_color;
         }
@@ -673,5 +662,74 @@ impl Particle {
             && (self.particle_type.properties().weight * api.random::<f32>() > other_weight))
             || (self.rises()
                 && (other_weight * api.random::<f32>() > self.particle_type.properties().weight))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl PColor {
+    const fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
+    }
+
+    // ChatGPT wrote these methods. "The formula used in the implementation is
+    // based on the description provided in the Wikipedia article on HSL and
+    // HSV."
+    fn into_hsv(&self) -> (f32, f32, f32) {
+        let r = self.r as f32 / 255.0;
+        let g = self.g as f32 / 255.0;
+        let b = self.b as f32 / 255.0;
+        let cmax = r.max(g).max(b);
+        let cmin = r.min(g).min(b);
+        let delta = cmax - cmin;
+        let h = if delta == 0.0 {
+            0.0
+        } else if cmax == r {
+            60.0 * ((g - b) / delta % 6.0)
+        } else if cmax == g {
+            60.0 * ((b - r) / delta + 2.0)
+        } else {
+            60.0 * ((r - g) / delta + 4.0)
+        };
+        let s = if cmax == 0.0 { 0.0 } else { delta / cmax };
+        let v = cmax;
+        (h, s, v)
+    }
+
+    fn from_hsv(h: f32, s: f32, v: f32) -> Self {
+        let c = v * s;
+        let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+        let m = v - c;
+        let (r, g, b) = if h < 60.0 {
+            (c, x, 0.0)
+        } else if h < 120.0 {
+            (x, c, 0.0)
+        } else if h < 180.0 {
+            (0.0, c, x)
+        } else if h < 240.0 {
+            (0.0, x, c)
+        } else if h < 300.0 {
+            (x, 0.0, c)
+        } else {
+            (c, 0.0, x)
+        };
+        PColor {
+            r: ((r + m) * 255.0) as u8,
+            g: ((g + m) * 255.0) as u8,
+            b: ((b + m) * 255.0) as u8,
+        }
+    }
+
+    fn scale_hsv(&self, rotate_h: f32, scale_s: f32, scale_v: f32) -> Self {
+        let (h, s, v) = self.into_hsv();
+        let h = (h + rotate_h) % 360.0;
+        let s = (s * scale_s).max(0.0).min(1.0);
+        let v = (v * scale_v).max(0.0).min(1.0);
+        PColor::from_hsv(h, s, v)
     }
 }

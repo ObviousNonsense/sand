@@ -861,19 +861,6 @@ fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Sett
         });
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct PColor {
-    r: u8,
-    g: u8,
-    b: u8,
-}
-
-impl PColor {
-    const fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b }
-    }
-}
-
 impl From<PColor> for Color {
     fn from(value: PColor) -> Self {
         Color::new(
