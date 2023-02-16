@@ -307,6 +307,14 @@ impl World {
                     self.width,
                     self.particle_grid[(x, y)].color,
                 );
+            }
+        }
+        // dbg!(&painter.screen_buffer);
+        // painter.screen_texture.update(&painter.screen_image);
+        painter.draw_screen(self.width, self.height);
+
+        for y in 0..self.height {
+            for x in 0..self.width {
                 if let Some(portal) = &self.portal_grid[(x, y)] {
                     portal.draw(x, y, painter);
                 }
@@ -315,9 +323,6 @@ impl World {
                 }
             }
         }
-        // dbg!(&painter.screen_buffer);
-        // painter.screen_texture.update(&painter.screen_image);
-        painter.draw_screen(self.width, self.height);
     }
 
     // TODO: Consider pre-calculating this and storing it as a vector
