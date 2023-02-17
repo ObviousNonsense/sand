@@ -81,6 +81,10 @@ async fn main() {
     loop {
         egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut world, fps));
 
+        if settings.painter.pixels_per_particle != settings.new_pixels_per_particle {
+            settings.rescale();
+        }
+
         // ─── Drawing ─────────────────────────────────────────────────────────────
         // clear_background(BLACK);
         world.draw_and_reset_all_particles(&mut settings.painter);
@@ -155,7 +159,21 @@ impl Settings {
             self.new_size.1,
         );
 
+        // self.painter.pixels_per_particle = self.new_pixels_per_particle;
+        self.update_screen_size();
+
+        self.last_portal_placed = vec![];
+        self.waiting_for_partner_portal = false;
+
+        World::new(self.new_size.0, self.new_size.1)
+    }
+
+    fn rescale(&mut self) {
         self.painter.pixels_per_particle = self.new_pixels_per_particle;
+        self.update_screen_size();
+    }
+
+    fn update_screen_size(&self) {
         // Something wrong with this on Mac for some reason. But also without it the
         // display is wrong on windows when the 4k monitor with 150% scaling is the
         // primary monitor
@@ -163,11 +181,6 @@ impl Settings {
             self.painter.world_px0 + self.new_size.0 as f32 * self.painter.pixels_per_particle,
             self.painter.world_py0 + self.new_size.1 as f32 * self.painter.pixels_per_particle,
         );
-
-        self.last_portal_placed = vec![];
-        self.waiting_for_partner_portal = false;
-
-        World::new(self.new_size.0, self.new_size.1)
     }
 }
 
@@ -653,6 +666,20 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
 
             ui.separator();
 
+            ui.horizontal(|ui| {
+                ui.label("Scale: ");
+                ui.add(
+                    egui::Slider::new(&mut settings.new_pixels_per_particle, 1.0..=30.0)
+                        .fixed_decimals(0)
+                        .step_by(1.0),
+                    // egui::DragValue::new(&mut settings.new_pixels_per_particle)
+                    //     .clamp_range(1.0..=30.0)
+                    //     .fixed_decimals(0)
+                    //     .speed(0.5),
+                );
+            });
+            ui.separator();
+
             egui::Grid::new("1").num_columns(2).show(ui, |ui| {
                 egui::Grid::new("")
                     .num_columns(2)
@@ -660,38 +687,38 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     .show(ui, |ui| {
                         // ui.group(|ui| {
                         // ui.horizontal(|ui| {
-                        ui.label("New Width:  ");
+                        ui.label("New X: ");
                         ui.add(
-                            egui::DragValue::new(&mut settings.new_size.0)
-                                .clamp_range(1..=1000)
+                            egui::Slider::new(&mut settings.new_size.0, 10..=1000)
                                 .fixed_decimals(0)
-                                .speed(5),
+                                .step_by(10.0),
+                            // egui::DragValue::new(&mut settings.new_size.0)
+                            //     .clamp_range(1..=1000)
+                            //     .fixed_decimals(0)
+                            //     .speed(5),
                         );
                         // });
                         ui.end_row();
                         // ui.horizontal(|ui| {
-                        ui.label("New Height: ");
+                        ui.label("New Y: ");
                         ui.add(
-                            egui::DragValue::new(&mut settings.new_size.1)
-                                .clamp_range(1..=1000)
+                            egui::Slider::new(&mut settings.new_size.1, 10..=1000)
                                 .fixed_decimals(0)
-                                .speed(5),
+                                .step_by(10.0),
+                            // egui::DragValue::new(&mut settings.new_size.1)
+                            //     .clamp_range(1..=1000)
+                            //     .fixed_decimals(0)
+                            //     .speed(5),
                         );
                         // });
                         ui.end_row();
 
                         // ui.horizontal(|ui| {
-                        ui.label("New Scale: ");
-                        ui.add(
-                            egui::DragValue::new(&mut settings.new_pixels_per_particle)
-                                .clamp_range(1.0..=30.0)
-                                .fixed_decimals(0)
-                                .speed(0.5),
-                        );
                         // });
-                        ui.end_row();
+                        // ui.end_row();
                     });
-                if ui.add(egui::Button::new("Reset/\nResize")).clicked() {
+                ui.end_row();
+                if ui.add(egui::Button::new("Reset/Resize")).clicked() {
                     *world = settings.resize_world_and_screen();
                 }
                 ui.end_row();
