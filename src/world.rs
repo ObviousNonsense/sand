@@ -209,7 +209,7 @@ impl World {
 
             let mut particle_clone = self.particle_grid[xy].clone();
 
-            if particle_clone.updated {
+            if particle_clone.particle_type == ParticleType::Empty || particle_clone.updated {
                 continue;
             }
 

@@ -18,7 +18,7 @@ pub struct ParticleTypeProperties {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(usize)]
+#[repr(u8)]
 pub enum ParticleType {
     Border = 0,
     Concrete = 1,
