@@ -364,3 +364,46 @@ impl World {
     }
 }
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
+// Adapted from https://gist.github.com/DavidMcLaughlin208/60e69e698e3858617c322d80a8f174e2
+// via https://www.youtube.com/watch?v=5Ka3tbbT-9E&list=WL&index=28&t=1112s
+pub fn iterate_over_line<F>(xy1: (usize, usize), xy2: (usize, usize), mut function: F)
+where
+    F: FnMut(usize, usize),
+{
+    if xy1 == xy2 {
+        // invoke function on xy1
+        function(xy1.0, xy1.1);
+        return;
+    }
+
+    let dx = xy1.0 as isize - xy2.0 as isize;
+    let dy = xy1.1 as isize - xy2.1 as isize;
+
+    let dx_is_larger = dx.abs() > dy.abs();
+
+    let x_modifier = if dx < 0 { 1 } else { -1 };
+    let y_modifier = if dy < 0 { 1 } else { -1 };
+
+    let longer_side_length = isize::max(dx.abs(), dy.abs());
+    let shorter_side_length = isize::min(dx.abs(), dy.abs());
+
+    let slope = if shorter_side_length == 0 || longer_side_length == 0 {
+        0.0
+    } else {
+        shorter_side_length as f32 / longer_side_length as f32
+    };
+
+    let mut shorter_side_increase;
+    for i in 1..=longer_side_length {
+        shorter_side_increase = (i as f32 * slope).round() as isize;
+        let (x_increase, y_increase) = if dx_is_larger {
+            (i, shorter_side_increase)
+        } else {
+            (shorter_side_increase, i)
+        };
+        let current_x = (xy1.0 as isize + (x_increase * x_modifier)) as usize;
+        let current_y = (xy1.1 as isize + (y_increase * y_modifier)) as usize;
+        // Invoke function (if within bounds?)
+        function(current_x, current_y);
+    }
+}

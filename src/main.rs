@@ -1,7 +1,7 @@
 use egui_macroquad::{egui, egui::RichText, *};
 use macroquad::{
     color::{hsl_to_rgb, rgb_to_hsl},
-    prelude::*,
+    prelude::{camera::mouse, *},
 };
 use particle::*;
 use std::iter::Cycle;
@@ -10,9 +10,9 @@ use world::*;
 mod particle;
 mod world;
 
-const MINIMUM_UPDATE_TIME: f64 = 1. / 90.;
+const MINIMUM_UPDATE_TIME: f64 = 1. / 80.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
-const LIMIT_UPDATE_RATE: bool = false;
+const LIMIT_UPDATE_RATE: bool = true;
 
 fn window_conf() -> Conf {
     Conf {
@@ -33,9 +33,9 @@ async fn main() {
         .into_iter()
         .cycle();
 
-    let world_height = 150;
-    let world_width = 150;
-    let pixels_per_particle = 4;
+    let world_height = 50;
+    let world_width = 50;
+    let pixels_per_particle = 16;
 
     // let screen_buffer: Vec<u8> = std::iter::repeat(255)
     //     .take(4 * world_width * world_height)
@@ -69,6 +69,8 @@ async fn main() {
         new_pixels_per_particle: painter.pixels_per_particle,
         new_size: (world_width, world_height),
         painter,
+        drawing_line: false,
+        line_xy1: None,
     };
 
     let mut world = settings.resize_world_and_screen();
@@ -79,6 +81,8 @@ async fn main() {
     let mut fps = 0.0;
 
     loop {
+        let time = get_time();
+        let frame_time = time - tic;
         egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut world, fps));
 
         if settings.painter.pixels_per_particle != settings.new_pixels_per_particle {
@@ -94,8 +98,6 @@ async fn main() {
         handle_input(&mut settings, &mut world);
         // ─────────────────────────────────────────────────────────────────────────
 
-        let time = get_time();
-        let frame_time = time - tic;
         if !LIMIT_UPDATE_RATE || frame_time >= MINIMUM_UPDATE_TIME {
             // ─── Limiting And Printing Fps ───────────────────────────────
             tic = time;
@@ -147,6 +149,8 @@ struct Settings {
     new_pixels_per_particle: f32,
     new_size: (usize, usize),
     painter: Painter,
+    drawing_line: bool,
+    line_xy1: Option<(usize, usize)>,
 }
 
 impl Settings {
@@ -365,65 +369,72 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
         && py > settings.painter.world_py0
         && py < screen_height()
     {
-        let (mousex_min, mousex_max, mousey_min, mousey_max) = settings.painter.calculate_brush(
-            px,
-            py,
-            settings.brush_size,
-            world.width(),
-            world.height(),
-        );
-
         let (mousex, mousey) = settings
             .painter
             .mouse_location(world.width(), world.height());
 
-        // Check whether the location/size of the portal we're trying to place is valid
-        settings.portal_placement_valid = true;
-        if settings.placeable_selector == PlaceableSelector::Portal {
-            match settings.portal_direction {
-                Direction::Up | Direction::Down => {
-                    for x in mousex_min..mousex_max {
-                        if x < 1 || x >= world.width() - 1 || world.portal_exists_at((x, mousey)) {
-                            settings.portal_placement_valid = false;
-                            break;
+        if settings.drawing_line {
+            if is_mouse_button_pressed(MouseButton::Left) {
+                if let Some(line_xy1) = settings.line_xy1 {
+                    // If we clicked and the first point has already been set,
+                    // create particles along the line
+                    create_particle(settings, world, line_xy1);
+                    iterate_over_line(line_xy1, (mousex, mousey), |x: usize, y: usize| {
+                        create_particle(settings, world, (x, y));
+                    });
+                    settings.line_xy1 = None;
+                } else {
+                    // If we clicked and the first point hasn't been set, set
+                    // the first point
+                    settings.line_xy1 = Some((mousex, mousey));
+                }
+            } else if let Some(line_xy1) = settings.line_xy1 {
+                // If we haven't clicked and the first point has been set,
+                // highlight along the line
+                highlight_particle_brush(settings, line_xy1.0, line_xy1.1);
+                iterate_over_line(line_xy1, (mousex, mousey), |x: usize, y: usize| {
+                    highlight_particle_brush(settings, x, y)
+                })
+            } else {
+                // Highlight the particle brush as normal otherwise.
+                highlight_particle_brush(settings, mousex, mousey);
+            }
+        } else {
+            let (mousex_min, mousex_max, mousey_min, mousey_max) = settings
+                .painter
+                .calculate_brush(px, py, settings.brush_size, world.width(), world.height());
+
+            // Check whether the location/size of the portal we're trying to place is valid
+            settings.portal_placement_valid = true;
+            if settings.placeable_selector == PlaceableSelector::Portal {
+                match settings.portal_direction {
+                    Direction::Up | Direction::Down => {
+                        for x in mousex_min..mousex_max {
+                            if x < 1
+                                || x >= world.width() - 1
+                                || world.portal_exists_at((x, mousey))
+                            {
+                                settings.portal_placement_valid = false;
+                                break;
+                            }
+                        }
+                    }
+                    Direction::Right | Direction::Left => {
+                        for y in mousey_min..mousey_max {
+                            if y < 1
+                                || y >= world.width() - 1
+                                || world.portal_exists_at((mousex, y))
+                            {
+                                settings.portal_placement_valid = false;
+                                break;
+                            }
                         }
                     }
                 }
-                Direction::Right | Direction::Left => {
-                    for y in mousey_min..mousey_max {
-                        if y < 1 || y >= world.width() - 1 || world.portal_exists_at((mousex, y)) {
-                            settings.portal_placement_valid = false;
-                            break;
-                        }
-                    }
-                }
             }
-        }
-
-        // println!("Brush span = {}", brush_span);
-        for x in mousex_min..mousex_max {
-            // println!("x = {}", x);
-            if x >= world.width() {
-                continue;
-            }
-            for y in mousey_min..mousey_max {
-                if y >= world.height() {
-                    continue;
-                }
-
-                // Highlight brush
-                highlight_brush(settings, x, y, mousex, mousey);
-
-                // Add particles on left click
-                if is_mouse_button_down(MouseButton::Left) {
-                    if settings.delete {
-                        world.delete_source((x, y));
-                        world.add_new_particle(ParticleType::Empty, (x, y), settings.replace);
-                    } else {
-                        create_placeable(settings, world, (x, y), mousex, mousey);
-                    }
-                }
-            }
+            highlight_and_fill_brush(
+                settings, world, mousex_min, mousex_max, mousey_min, mousey_max, mousex, mousey,
+            );
         }
     }
 
@@ -457,12 +468,53 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
     }
 }
 
+fn highlight_and_fill_brush(
+    settings: &mut Settings,
+    world: &mut World,
+    mousex_min: usize,
+    mousex_max: usize,
+    mousey_min: usize,
+    mousey_max: usize,
+    mousex: usize,
+    mousey: usize,
+) {
+    // println!("Brush span = {}", brush_span);
+    for x in mousex_min..mousex_max {
+        // println!("x = {}", x);
+        if x >= world.width() {
+            continue;
+        }
+        for y in mousey_min..mousey_max {
+            if y >= world.height() {
+                continue;
+            }
+
+            // Highlight brush
+            highlight_brush(settings, x, y, mousex, mousey);
+
+            // Add particles on left click
+            if is_mouse_button_down(MouseButton::Left) {
+                if settings.delete {
+                    world.delete_source((x, y));
+                    world.add_new_particle(ParticleType::Empty, (x, y), settings.replace);
+                } else {
+                    create_placeable(settings, world, (x, y), mousex, mousey);
+                }
+            }
+        }
+    }
+}
+
+fn highlight_particle_brush(settings: &Settings, x: usize, y: usize) {
+    let mut color: Color = settings.placement_type.properties().base_color.into();
+    color.a = 0.4;
+    settings.painter.draw_particle(x, y, color);
+}
+
 fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mousey: usize) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
-            let mut color: Color = settings.placement_type.properties().base_color.into();
-            color.a = 0.4;
-            settings.painter.draw_particle(x, y, color);
+            highlight_particle_brush(settings, x, y);
         }
         PlaceableSelector::Source => {
             let mut color: Color = settings.placement_type.properties().base_color.into();
@@ -509,6 +561,10 @@ fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mouse
     }
 }
 
+fn create_particle(settings: &Settings, world: &mut World, xy: (usize, usize)) {
+    world.add_new_particle(settings.placement_type, xy, settings.replace);
+}
+
 fn create_placeable(
     settings: &mut Settings,
     world: &mut World,
@@ -518,7 +574,7 @@ fn create_placeable(
 ) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
-            world.add_new_particle(settings.placement_type, xy, settings.replace);
+            create_particle(settings, world, xy);
         }
         PlaceableSelector::Source => {
             world.add_new_source(
@@ -860,6 +916,15 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                 ui.label("");
                 ui.end_row();
             });
+
+            ui.toggle_value(&mut settings.drawing_line, "Line");
+            if settings.drawing_line {
+                settings.placeable_selector = PlaceableSelector::Particle;
+                settings.delete = false;
+                settings.brush_size = 1.0;
+            } else {
+                settings.line_xy1 = None;
+            }
 
             if settings.debug_mode {
                 ui.group(|ui| {
