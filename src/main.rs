@@ -1,7 +1,7 @@
 use egui_macroquad::{egui, egui::RichText, *};
 use macroquad::{
     color::{hsl_to_rgb, rgb_to_hsl},
-    prelude::{camera::mouse, *},
+    prelude::*,
 };
 use particle::*;
 use std::iter::Cycle;
@@ -12,7 +12,7 @@ mod world;
 
 const MINIMUM_UPDATE_TIME: f64 = 1. / 80.;
 // const MINIMUM_UPDATE_TIME: f64 = 1. / 1.;
-const LIMIT_UPDATE_RATE: bool = true;
+const LIMIT_UPDATE_RATE: bool = false;
 
 fn window_conf() -> Conf {
     Conf {
@@ -33,9 +33,9 @@ async fn main() {
         .into_iter()
         .cycle();
 
-    let world_height = 50;
-    let world_width = 50;
-    let pixels_per_particle = 16;
+    let world_height = 200;
+    let world_width = 200;
+    let pixels_per_particle = 4;
 
     // let screen_buffer: Vec<u8> = std::iter::repeat(255)
     //     .take(4 * world_width * world_height)

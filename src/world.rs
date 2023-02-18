@@ -366,18 +366,107 @@ impl World {
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 // Adapted from https://gist.github.com/DavidMcLaughlin208/60e69e698e3858617c322d80a8f174e2
 // via https://www.youtube.com/watch?v=5Ka3tbbT-9E&list=WL&index=28&t=1112s
-pub fn iterate_over_line<F>(xy1: (usize, usize), xy2: (usize, usize), mut function: F)
+// pub fn iterate_over_line<F>(xy1: (usize, usize), xy2: (usize, usize), mut iter_function: F)
+// where
+//     F: FnMut(usize, usize),
+// {
+//     if xy1 == xy2 {
+//         // invoke function on xy1
+//         iter_function(xy1.0, xy1.1);
+//         return;
+//     }
+
+//     let dx = xy1.0 as isize - xy2.0 as isize;
+//     let dy = xy1.1 as isize - xy2.1 as isize;
+
+//     let dx_is_larger = dx.abs() > dy.abs();
+
+//     let x_modifier = if dx < 0 { 1 } else { -1 };
+//     let y_modifier = if dy < 0 { 1 } else { -1 };
+
+//     let longer_side_length = isize::max(dx.abs(), dy.abs());
+//     let shorter_side_length = isize::min(dx.abs(), dy.abs());
+
+//     let slope = if shorter_side_length == 0 || longer_side_length == 0 {
+//         0.0
+//     } else {
+//         shorter_side_length as f32 / longer_side_length as f32
+//     };
+
+//     let mut shorter_side_increase;
+//     for i in 1..=longer_side_length {
+//         shorter_side_increase = (i as f32 * slope).round() as isize;
+//         let (x_increase, y_increase) = if dx_is_larger {
+//             (i, shorter_side_increase)
+//         } else {
+//             (shorter_side_increase, i)
+//         };
+
+//         let current_x = (xy1.0 as isize + (x_increase * x_modifier)) as usize;
+//         let current_y = (xy1.1 as isize + (y_increase * y_modifier)) as usize;
+//         // Invoke function (if within bounds?)
+//         iter_function(current_x, current_y);
+//     }
+// }
+
+// pub fn iterate_over_line_delta<F>(dxdy: (isize, isize), mut iter_function: F)
+// where
+//     F: FnMut(isize, isize) -> bool,
+// {
+//     // Not sure I we should be doing this here.
+//     if dxdy == (0, 0) {
+//         // invoke function on xy1
+//         iter_function(dxdy.0, dxdy.1);
+//         return;
+//     }
+
+//     let (dx, dy) = dxdy;
+
+//     let dx_is_larger = dx.abs() > dy.abs();
+
+//     let x_modifier = if dx < 0 { 1 } else { -1 };
+//     let y_modifier = if dy < 0 { 1 } else { -1 };
+
+//     let longer_side_length = isize::max(dx.abs(), dy.abs());
+//     let shorter_side_length = isize::min(dx.abs(), dy.abs());
+
+//     let slope = if shorter_side_length == 0 || longer_side_length == 0 {
+//         0.0
+//     } else {
+//         shorter_side_length as f32 / longer_side_length as f32
+//     };
+
+//     let mut prev_x = 0;
+//     let mut prev_y = 0;
+//     let mut shorter_side_increase;
+//     for i in 1..=longer_side_length {
+//         shorter_side_increase = (i as f32 * slope).round() as isize;
+//         let (x_increase, y_increase) = if dx_is_larger {
+//             (i, shorter_side_increase)
+//         } else {
+//             (shorter_side_increase, i)
+//         };
+
+//         let current_x = x_increase * x_modifier;
+//         let current_y = y_increase * y_modifier;
+//         let delta_x = current_x - prev_x;
+//         let delta_y = current_y - prev_y;
+//         if !iter_function(delta_x, delta_y) {
+//             break;
+//         };
+//         prev_x = current_x;
+//         prev_y = current_y;
+//     }
+// }
+
+fn iterate_over_line_common<F>(dx: isize, dy: isize, mut iter_function: F)
 where
-    F: FnMut(usize, usize),
+    F: FnMut(isize, isize, isize, isize) -> bool,
 {
-    if xy1 == xy2 {
-        // invoke function on xy1
-        function(xy1.0, xy1.1);
+    if dx == 0 && dy == 0 {
+        iter_function(0, 0, 0, 0);
         return;
     }
-
-    let dx = xy1.0 as isize - xy2.0 as isize;
-    let dy = xy1.1 as isize - xy2.1 as isize;
 
     let dx_is_larger = dx.abs() > dy.abs();
 
@@ -393,6 +482,8 @@ where
         shorter_side_length as f32 / longer_side_length as f32
     };
 
+    let mut prev_x = 0;
+    let mut prev_y = 0;
     let mut shorter_side_increase;
     for i in 1..=longer_side_length {
         shorter_side_increase = (i as f32 * slope).round() as isize;
@@ -401,9 +492,36 @@ where
         } else {
             (shorter_side_increase, i)
         };
-        let current_x = (xy1.0 as isize + (x_increase * x_modifier)) as usize;
-        let current_y = (xy1.1 as isize + (y_increase * y_modifier)) as usize;
-        // Invoke function (if within bounds?)
-        function(current_x, current_y);
+
+        let current_x = x_increase * x_modifier;
+        let current_y = y_increase * y_modifier;
+        let delta_x = current_x - prev_x;
+        let delta_y = current_y - prev_y;
+        if !iter_function(current_x, current_y, delta_x, delta_y) {
+            break;
+        };
+        prev_x = current_x;
+        prev_y = current_y;
     }
+}
+
+pub fn iterate_over_line<F>(xy1: (usize, usize), xy2: (usize, usize), mut iter_function: F)
+where
+    F: FnMut(usize, usize),
+{
+    let dx = xy1.0 as isize - xy2.0 as isize;
+    let dy = xy1.1 as isize - xy2.1 as isize;
+    iterate_over_line_common(dx, dy, |delta_x, delta_y, _, _| {
+        let current_x = (xy1.0 as isize + delta_x) as usize;
+        let current_y = (xy1.1 as isize + delta_y) as usize;
+        iter_function(current_x, current_y);
+        true // always continue iteration
+    });
+}
+
+pub fn iterate_over_line_delta<F>(dxdy: (isize, isize), mut iter_function: F)
+where
+    F: FnMut(isize, isize) -> bool,
+{
+    iterate_over_line_common(dxdy.0, dxdy.1, |_, _, dx, dy| iter_function(dx, dy));
 }
