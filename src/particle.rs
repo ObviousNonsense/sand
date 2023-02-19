@@ -698,15 +698,21 @@ impl Particle {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct PColor {
     pub r: u8,
     pub g: u8,
     pub b: u8,
 }
 
+impl std::fmt::Debug for PColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PColor {{r: {}, g: {}, b: {}}}", self.r, self.g, self.b)
+    }
+}
+
 impl PColor {
-    const fn new(r: u8, g: u8, b: u8) -> Self {
+    pub const fn new(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b }
     }
 
@@ -758,11 +764,19 @@ impl PColor {
         }
     }
 
-    fn scale_hsv(&self, rotate_h: f32, scale_s: f32, scale_v: f32) -> Self {
+    pub fn scale_hsv(&self, rotate_h: f32, scale_s: f32, scale_v: f32) -> Self {
         let (h, s, v) = self.into_hsv();
         let h = (h + rotate_h) % 360.0;
         let s = (s * scale_s).clamp(0.0, 1.0);
         let v = (v * scale_v).clamp(0.0, 1.0);
+        PColor::from_hsv(h, s, v)
+    }
+
+    pub fn add_hsv(&self, rotate_h: f32, add_s: f32, add_v: f32) -> Self {
+        let (h, s, v) = self.into_hsv();
+        let h = (h + rotate_h) % 360.0;
+        let s = (s + add_s).clamp(0.0, 1.0);
+        let v = (v + add_v).clamp(0.0, 1.0);
         PColor::from_hsv(h, s, v)
     }
 }

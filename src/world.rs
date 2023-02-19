@@ -363,9 +363,7 @@ impl World {
         )
     }
 }
-// ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
-// Adapted from https://gist.github.com/DavidMcLaughlin208/60e69e698e3858617c322d80a8f174e2
-// via https://www.youtube.com/watch?v=5Ka3tbbT-9E&list=WL&index=28&t=1112s
+
 // pub fn iterate_over_line<F>(xy1: (usize, usize), xy2: (usize, usize), mut iter_function: F)
 // where
 //     F: FnMut(usize, usize),
@@ -459,12 +457,15 @@ impl World {
 //     }
 // }
 
-fn iterate_over_line_common<F>(dx: isize, dy: isize, mut iter_function: F)
+// ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
+// Adapted from https://gist.github.com/DavidMcLaughlin208/60e69e698e3858617c322d80a8f174e2
+// via https://www.youtube.com/watch?v=5Ka3tbbT-9E&list=WL&index=28&t=1112s
+fn iterate_over_line_common<F>(dx: isize, dy: isize, mut inner_function: F)
 where
     F: FnMut(isize, isize, isize, isize) -> bool,
 {
     if dx == 0 && dy == 0 {
-        iter_function(0, 0, 0, 0);
+        inner_function(0, 0, 0, 0);
         return;
     }
 
@@ -497,7 +498,7 @@ where
         let current_y = y_increase * y_modifier;
         let delta_x = current_x - prev_x;
         let delta_y = current_y - prev_y;
-        if !iter_function(current_x, current_y, delta_x, delta_y) {
+        if !inner_function(current_x, current_y, delta_x, delta_y) {
             break;
         };
         prev_x = current_x;
@@ -505,7 +506,7 @@ where
     }
 }
 
-pub fn iterate_over_line<F>(xy1: (usize, usize), xy2: (usize, usize), mut iter_function: F)
+pub fn iterate_over_line<F>(xy1: (usize, usize), xy2: (usize, usize), mut inner_function: F)
 where
     F: FnMut(usize, usize),
 {
@@ -514,14 +515,14 @@ where
     iterate_over_line_common(dx, dy, |delta_x, delta_y, _, _| {
         let current_x = (xy1.0 as isize + delta_x) as usize;
         let current_y = (xy1.1 as isize + delta_y) as usize;
-        iter_function(current_x, current_y);
+        inner_function(current_x, current_y);
         true // always continue iteration
     });
 }
 
-pub fn iterate_over_line_delta<F>(dxdy: (isize, isize), mut iter_function: F)
+pub fn iterate_over_line_delta<F>(dxdy: (isize, isize), mut inner_function: F)
 where
     F: FnMut(isize, isize) -> bool,
 {
-    iterate_over_line_common(dxdy.0, dxdy.1, |_, _, dx, dy| iter_function(dx, dy));
+    iterate_over_line_common(dxdy.0, dxdy.1, |_, _, dx, dy| inner_function(dx, dy));
 }

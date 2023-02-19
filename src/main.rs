@@ -29,20 +29,25 @@ fn window_conf() -> Conf {
 async fn main() {
     // color_eyre::install()?;
 
-    let mut color_cycle = vec![RED, LIME, VIOLET, PINK, ORANGE, GOLD, BEIGE, WHITE]
-        .into_iter()
-        .cycle();
+    let mut color_cycle: Cycle<std::vec::IntoIter<particle::PColor>> = vec![
+        RED.into(),
+        LIME.into(),
+        VIOLET.into(),
+        PINK.into(),
+        ORANGE.into(),
+        GOLD.into(),
+        BEIGE.into(),
+        WHITE.into(),
+    ]
+    .into_iter()
+    .cycle();
 
     let world_height = 200;
     let world_width = 200;
     let pixels_per_particle = 4;
 
-    // let screen_buffer: Vec<u8> = std::iter::repeat(255)
-    //     .take(4 * world_width * world_height)
-    //     .collect();
-
     let painter = Painter::new(
-        225.0,
+        300.0,
         0.0,
         pixels_per_particle as f32,
         world_width,
@@ -69,9 +74,11 @@ async fn main() {
         new_pixels_per_particle: painter.pixels_per_particle,
         new_size: (world_width, world_height),
         painter,
-        drawing_line: false,
-        line_xy1: None,
+        drawing_style: DrawingStyle::Brush,
+        draw_xy1: None,
     };
+
+    // println!("{:#?}", settings);
 
     let mut world = settings.resize_world_and_screen();
 
@@ -129,6 +136,7 @@ async fn main() {
 }
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 
+#[derive(Debug)]
 struct Settings {
     paused: bool,
     brush_size: f32,
@@ -143,14 +151,14 @@ struct Settings {
     portal_direction: Direction,
     last_portal_placed: Vec<(usize, usize)>,
     waiting_for_partner_portal: bool,
-    portal_color: Color,
-    portal_placement_valid: bool,
-    portal_color_cycle: Cycle<std::vec::IntoIter<Color>>,
     new_pixels_per_particle: f32,
     new_size: (usize, usize),
     painter: Painter,
-    drawing_line: bool,
-    line_xy1: Option<(usize, usize)>,
+    drawing_style: DrawingStyle,
+    draw_xy1: Option<(usize, usize)>,
+    portal_placement_valid: bool,
+    portal_color: PColor,
+    portal_color_cycle: Cycle<std::vec::IntoIter<PColor>>,
 }
 
 impl Settings {
@@ -193,6 +201,16 @@ pub struct Painter {
     world_py0: f32,
     pixels_per_particle: f32,
     screen_buffer: Vec<u8>,
+}
+
+impl core::fmt::Debug for Painter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Painter")
+            .field("world_px0", &self.world_px0)
+            .field("world_py0", &self.world_py0)
+            .field("pixels_per_particle", &self.pixels_per_particle)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Painter {
@@ -373,43 +391,131 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
             .painter
             .mouse_location(world.width(), world.height());
 
-        if settings.drawing_line {
-            if is_mouse_button_pressed(MouseButton::Left) {
-                if let Some(line_xy1) = settings.line_xy1 {
-                    // If we clicked and the first point has already been set,
-                    // create particles along the line
-                    create_particle(settings, world, line_xy1);
-                    iterate_over_line(line_xy1, (mousex, mousey), |x: usize, y: usize| {
-                        create_particle(settings, world, (x, y));
-                    });
-                    settings.line_xy1 = None;
-                } else {
-                    // If we clicked and the first point hasn't been set, set
-                    // the first point
-                    settings.line_xy1 = Some((mousex, mousey));
-                }
-            } else if let Some(line_xy1) = settings.line_xy1 {
-                // If we haven't clicked and the first point has been set,
-                // highlight along the line
-                highlight_particle_brush(settings, line_xy1.0, line_xy1.1);
-                iterate_over_line(line_xy1, (mousex, mousey), |x: usize, y: usize| {
-                    highlight_particle_brush(settings, x, y)
-                })
-            } else {
-                // Highlight the particle brush as normal otherwise.
-                highlight_particle_brush(settings, mousex, mousey);
-            }
-        } else {
-            let (mousex_min, mousex_max, mousey_min, mousey_max) = settings
-                .painter
-                .calculate_brush(px, py, settings.brush_size, world.width(), world.height());
+        let (brushx_min, brushx_max, brushy_min, brushy_max) = settings.painter.calculate_brush(
+            px,
+            py,
+            settings.brush_size,
+            world.width(),
+            world.height(),
+        );
 
-            // Check whether the location/size of the portal we're trying to place is valid
-            settings.portal_placement_valid = true;
-            if settings.placeable_selector == PlaceableSelector::Portal {
+        // dbg!(&settings.drawing_style);
+        match settings.drawing_style {
+            //
+            DrawingStyle::Line => {
+                if is_mouse_button_pressed(MouseButton::Left) {
+                    if let Some(xy1) = settings.draw_xy1 {
+                        // If we clicked and the first point has already been set,
+                        // create particles along the line
+                        create_particle(settings, world, xy1);
+                        iterate_over_line(xy1, (mousex, mousey), |x, y| {
+                            create_particle(settings, world, (x, y));
+                        });
+                        settings.draw_xy1 = None;
+                    } else {
+                        // If we clicked and the first point hasn't been set, set
+                        // the first point
+                        settings.draw_xy1 = Some((mousex, mousey));
+                    }
+                } else if let Some(xy1) = settings.draw_xy1 {
+                    // If we haven't clicked and the first point has been set,
+                    // highlight along the line
+                    // highlight_particle_brush(settings, xy1.0, xy1.1);
+                    iterate_over_line(xy1, (mousex, mousey), |x, y| {
+                        let (px, py) = settings.painter.xy_to_pixels(x, y);
+                        let (brushx_min, brushx_max, brushy_min, brushy_max) =
+                            settings.painter.calculate_brush(
+                                px,
+                                py,
+                                settings.brush_size,
+                                world.width(),
+                                world.height(),
+                            );
+                        apply_fn_in_square(
+                            brushx_min,
+                            brushx_max,
+                            brushy_min,
+                            brushy_max,
+                            world.width(),
+                            world.height(),
+                            |x, y| highlight_brush(settings, x, y),
+                        )
+                    })
+                } else {
+                    // Highlight the particle brush as normal otherwise.
+                    highlight_particle_brush(settings, mousex, mousey);
+                }
+            }
+
+            DrawingStyle::Brush => {
+                if is_mouse_button_pressed(MouseButton::Left) {
+                    settings.draw_xy1 = Some((mousex, mousey));
+                }
+
+                if !is_mouse_button_down(MouseButton::Left) {
+                    settings.draw_xy1 = None;
+                }
+
+                if let Some(xy1) = settings.draw_xy1 {
+                    iterate_over_line(xy1, (mousex, mousey), |x, y| {
+                        let (px, py) = settings.painter.xy_to_pixels(x, y);
+                        let (brushx_min, brushx_max, brushy_min, brushy_max) =
+                            settings.painter.calculate_brush(
+                                px,
+                                py,
+                                settings.brush_size,
+                                world.width(),
+                                world.height(),
+                            );
+                        apply_fn_in_square(
+                            brushx_min,
+                            brushx_max,
+                            brushy_min,
+                            brushy_max,
+                            world.width(),
+                            world.height(),
+                            |x, y| {
+                                if settings.delete {
+                                    world.delete_source((x, y));
+                                    world.add_new_particle(
+                                        ParticleType::Empty,
+                                        (x, y),
+                                        settings.replace,
+                                    );
+                                } else {
+                                    create_placeable(settings, world, (x, y), mousex, mousey);
+                                }
+                            },
+                        );
+                    });
+                    settings.draw_xy1 = Some((mousex, mousey));
+                } else {
+                    apply_fn_in_square(
+                        brushx_min,
+                        brushx_max,
+                        brushy_min,
+                        brushy_max,
+                        world.width(),
+                        world.height(),
+                        |x, y| highlight_brush(settings, x, y),
+                    );
+                }
+
+                // highlight_and_fill_brush(
+                //     settings, world, brushx_min, brushx_max, brushy_min, brushy_max, mousex, mousey,
+                // );
+            }
+
+            DrawingStyle::Portal => {
+                let (brushx_min, brushx_max, brushy_min, brushy_max) = settings
+                    .painter
+                    .calculate_brush(px, py, settings.brush_size, world.width(), world.height());
+
+                // Check whether the location/size of the portal we're trying to place is valid
+                settings.portal_placement_valid = true;
                 match settings.portal_direction {
                     Direction::Up | Direction::Down => {
-                        for x in mousex_min..mousex_max {
+                        for x in brushx_min..brushx_max {
                             if x < 1
                                 || x >= world.width() - 1
                                 || world.portal_exists_at((x, mousey))
@@ -420,7 +526,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                         }
                     }
                     Direction::Right | Direction::Left => {
-                        for y in mousey_min..mousey_max {
+                        for y in brushy_min..brushy_max {
                             if y < 1
                                 || y >= world.width() - 1
                                 || world.portal_exists_at((mousex, y))
@@ -431,10 +537,10 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                         }
                     }
                 }
+                highlight_and_fill_brush(
+                    settings, world, brushx_min, brushx_max, brushy_min, brushy_max, mousex, mousey,
+                );
             }
-            highlight_and_fill_brush(
-                settings, world, mousex_min, mousex_max, mousey_min, mousey_max, mousex, mousey,
-            );
         }
     }
 
@@ -468,29 +574,54 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
     }
 }
 
+fn apply_fn_in_square<F>(
+    xmin: usize,
+    xmax: usize,
+    ymin: usize,
+    ymax: usize,
+    xbound: usize,
+    ybound: usize,
+    mut inner_function: F,
+) where
+    F: FnMut(usize, usize),
+{
+    // Should this be inclusive?
+    for x in xmin..xmax {
+        if x >= xbound {
+            continue;
+        }
+        for y in ymin..ymax {
+            if y >= ybound {
+                continue;
+            }
+            inner_function(x, y);
+        }
+    }
+}
+
 fn highlight_and_fill_brush(
     settings: &mut Settings,
     world: &mut World,
-    mousex_min: usize,
-    mousex_max: usize,
-    mousey_min: usize,
-    mousey_max: usize,
+    brushx_min: usize,
+    brushx_max: usize,
+    brushy_min: usize,
+    brushy_max: usize,
     mousex: usize,
     mousey: usize,
 ) {
     // println!("Brush span = {}", brush_span);
-    for x in mousex_min..mousex_max {
+    for x in brushx_min..brushx_max {
         // println!("x = {}", x);
         if x >= world.width() {
             continue;
         }
-        for y in mousey_min..mousey_max {
+        for y in brushy_min..brushy_max {
             if y >= world.height() {
                 continue;
             }
 
             // Highlight brush
-            highlight_brush(settings, x, y, mousex, mousey);
+            highlight_brush(settings, x, y);
 
             // Add particles on left click
             if is_mouse_button_down(MouseButton::Left) {
@@ -511,7 +642,7 @@ fn highlight_particle_brush(settings: &Settings, x: usize, y: usize) {
     settings.painter.draw_particle(x, y, color);
 }
 
-fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mousey: usize) {
+fn highlight_brush(settings: &Settings, x: usize, y: usize) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
             highlight_particle_brush(settings, x, y);
@@ -540,19 +671,19 @@ fn highlight_brush(settings: &Settings, x: usize, y: usize, mousex: usize, mouse
             if !settings.portal_placement_valid {
                 return;
             }
-            match settings.portal_direction {
-                Direction::Up | Direction::Down => {
-                    if y != mousey {
-                        return;
-                    }
-                }
-                Direction::Right | Direction::Left => {
-                    if x != mousex {
-                        return;
-                    }
-                }
-            }
-            let mut color = settings.portal_color;
+            // match settings.portal_direction {
+            //     Direction::Up | Direction::Down => {
+            //         if y != mousey {
+            //             return;
+            //         }
+            //     }
+            //     Direction::Right | Direction::Left => {
+            //         if x != mousex {
+            //             return;
+            //         }
+            //     }
+            // }
+            let mut color: Color = settings.portal_color.into();
             color.a = 0.4;
             settings
                 .painter
@@ -613,10 +744,11 @@ fn create_placeable(
             }
 
             let partner_xy = if settings.waiting_for_partner_portal {
-                let mut color = rgb_to_hsl(settings.portal_color);
-                color.1 += 0.01;
-                color.2 += 0.01;
-                settings.portal_color = hsl_to_rgb(color.0, color.1, color.2);
+                // let mut color = rgb_to_hsl(settings.portal_color);
+                // color.1 += 0.01;
+                // color.2 += 0.01;
+                // settings.portal_color = hsl_to_rgb(color.0, color.1, color.2);
+                settings.portal_color.add_hsv(0.0, 0.01, 0.01);
                 settings.last_portal_placed.pop()
             } else {
                 None
@@ -628,16 +760,17 @@ fn create_placeable(
                 xy,
                 partner_xy,
                 settings.portal_direction,
-                settings.portal_color,
+                settings.portal_color.into(),
             );
 
             if added {
                 if !settings.waiting_for_partner_portal {
                     settings.last_portal_placed.push(xy);
-                    let mut color = rgb_to_hsl(settings.portal_color);
-                    color.1 -= 0.01;
-                    color.2 -= 0.01;
-                    settings.portal_color = hsl_to_rgb(color.0, color.1, color.2);
+                    // let mut color = rgb_to_hsl(settings.portal_color);
+                    // color.1 -= 0.01;
+                    // color.2 -= 0.01;
+                    // settings.portal_color = hsl_to_rgb(color.0, color.1, color.2);
+                    settings.portal_color.add_hsv(0.0, -0.01, -0.01);
                 } else if settings.last_portal_placed.is_empty() {
                     settings.portal_color = settings.portal_color_cycle.next().unwrap();
                     settings.waiting_for_partner_portal = false;
@@ -673,7 +806,24 @@ fn debug_particle_string(world: &World, painter: &Painter) -> String {
     // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
     let (x, y) = painter.mouse_location(world.width(), world.height());
     let p = world.particle_at((x, y));
-    format!("({}, {}): {:?}", x, y, p)
+    format!("({}, {}): {:#?}", x, y, p)
+}
+
+#[derive(Debug, PartialEq)]
+enum DrawingStyle {
+    Brush,
+    Line,
+    Portal,
+}
+
+impl DrawingStyle {
+    pub fn as_str(&self) -> &str {
+        match self {
+            DrawingStyle::Brush => "Brush",
+            DrawingStyle::Line => "Line",
+            DrawingStyle::Portal => "Portal",
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -803,27 +953,59 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     ui.horizontal(|ui| {
                         ui.add(
                             egui::DragValue::new(&mut settings.brush_size)
-                                .clamp_range(1.0..=30.0)
+                                .clamp_range(1.0..=100.0)
                                 .fixed_decimals(0)
                                 .speed(0.2),
                         );
-                        // if ui.button("➕").clicked() {
-                        //     settings.brush_size += 1.0;
-                        // }
-                        // if ui.button("➖").clicked() {
-                        //     settings.brush_size -= 1.0;
-                        // }
                     });
                     ui.end_row();
                 });
 
-            // ui.label("Placement Type");
-            // egui::ComboBox::from_label("")
-            //     .selected_text(settings.placeable_selector.as_str())
-            //     .width(1.0)
-            //     .show_ui(ui, |ui| {
             ui.separator();
             ui.horizontal(|ui| {
+                if ui
+                    .selectable_value(
+                        &mut settings.drawing_style,
+                        DrawingStyle::Brush,
+                        DrawingStyle::Brush.as_str(),
+                    )
+                    .clicked()
+                {
+                    settings.draw_xy1 = None;
+                    if settings.placeable_selector == PlaceableSelector::Portal {
+                        settings.placeable_selector = PlaceableSelector::Particle;
+                    }
+                };
+                if ui
+                    .selectable_value(
+                        &mut settings.drawing_style,
+                        DrawingStyle::Line,
+                        DrawingStyle::Line.as_str(),
+                    )
+                    .clicked()
+                {
+                    settings.draw_xy1 = None;
+                    settings.brush_size = 1.0;
+                    if settings.placeable_selector == PlaceableSelector::Portal {
+                        settings.placeable_selector = PlaceableSelector::Particle;
+                    }
+                };
+                if ui
+                    .selectable_value(
+                        &mut settings.drawing_style,
+                        DrawingStyle::Portal,
+                        DrawingStyle::Portal.as_str(),
+                    )
+                    .clicked()
+                {
+                    settings.draw_xy1 = None;
+                    settings.placeable_selector = PlaceableSelector::Portal
+                };
+            });
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.set_enabled(settings.drawing_style != DrawingStyle::Portal);
                 ui.selectable_value(
                     &mut settings.placeable_selector,
                     PlaceableSelector::Particle,
@@ -838,11 +1020,6 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     &mut settings.placeable_selector,
                     PlaceableSelector::Sink,
                     PlaceableSelector::Sink.as_str(),
-                );
-                ui.selectable_value(
-                    &mut settings.placeable_selector,
-                    PlaceableSelector::Portal,
-                    PlaceableSelector::Portal.as_str(),
                 );
             });
             // });
@@ -916,22 +1093,20 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                 ui.label("");
                 ui.end_row();
             });
-
-            ui.toggle_value(&mut settings.drawing_line, "Line");
-            if settings.drawing_line {
-                settings.placeable_selector = PlaceableSelector::Particle;
-                settings.delete = false;
-                settings.brush_size = 1.0;
-            } else {
-                settings.line_xy1 = None;
-            }
-
-            if settings.debug_mode {
-                ui.group(|ui| {
-                    ui.label(debug_particle_string(world, &settings.painter));
-                });
-            }
         });
+    if settings.debug_mode {
+        egui::Window::new("settings")
+            .default_pos([
+                settings.painter.world_px0 - 100.0,
+                settings.painter.world_py0,
+            ])
+            .show(ctx, |ui| {
+                ui.label(format!("{:#?}", settings));
+            });
+        // ui.group(|ui| {
+        //     // ui.label(debug_particle_string(world, &settings.painter));
+        // });
+    }
 }
 
 fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Settings) {
@@ -960,6 +1135,22 @@ impl From<PColor> for Color {
             value.g as f32 / 255.0,
             value.b as f32 / 255.0,
             1.0,
+        )
+    }
+}
+
+impl From<Color> for PColor {
+    fn from(value: Color) -> Self {
+        if value.a < 1.0 {
+            println!(
+                "WARNING: Converting Color to PColor ignores alpha of {}",
+                value.a
+            );
+        }
+        PColor::new(
+            (value.r * 255.0) as u8,
+            (value.g * 255.0) as u8,
+            (value.b * 255.0) as u8,
         )
     }
 }
