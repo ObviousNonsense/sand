@@ -94,14 +94,10 @@ impl<'a> WorldApi<'a> {
         self.world.relative_particle_mut(self.xy, dxdy)
     }
 
-    /// Swaps the particle with the one dxdy away.
-    /// Do not attempt to mutate the particle after calling this.
-    // fn swap_with(&mut self, dxdy: (isize, isize), particle: Particle) {
     pub fn swap_with(&mut self, dxdy: (isize, isize)) {
         let other_xy = self.world.relative_xy(self.xy, dxdy);
-        let other_p = self.world.particle_grid[other_xy].clone();
-        self.world.particle_grid[self.xy] = other_p;
-        // self.world.particle_grid[other_xy] = particle;
+        self.world
+            .put_particle(self.xy, self.world.get_particle(other_xy).clone());
         self.xy = other_xy;
     }
 
@@ -116,16 +112,20 @@ impl<'a> WorldApi<'a> {
 
     pub fn replace_with(&mut self, dxdy: (isize, isize), particle: Particle) {
         let xy = self.world.relative_xy(self.xy, dxdy);
-        self.world.particle_grid[xy] = particle;
+        self.world.put_particle(xy, particle);
     }
 
     pub fn update_in_world(&mut self, particle: Particle) {
-        self.world.particle_grid[self.xy] = particle;
+        self.world.put_particle(self.xy, particle);
     }
 
     pub fn xy(&self) -> &(usize, usize) {
         &self.xy
     }
+}
+
+pub struct WorldChunk {
+    particle_grid: Array2D<Particle>,
 }
 
 // ─── World ─────────────────────────────────────────────────────────────────────────────────── ✣ ─
@@ -142,28 +142,30 @@ impl World {
     pub fn new(width: usize, height: usize) -> Self {
         let mut rng = thread_rng();
 
-        let mut particle_grid =
+        let particle_grid =
             Array2D::filled_with(Particle::new(ParticleType::Empty, &mut rng), width, height);
         let source_grid = Array2D::filled_with(None, width, height);
         let portal_grid = Array2D::filled_with(None, width, height);
 
-        for y in 0..height {
-            for x in 0..width {
-                if x == 0 || x == width - 1 || y == 0 || y == height - 1 {
-                    // println!("x: {:?}, y: {:?}", x, y);
-                    particle_grid[(x, y)] = Particle::new(ParticleType::Border, &mut rng);
-                }
-            }
-        }
-
-        Self {
+        let mut new_world = Self {
             particle_grid,
             source_grid,
             portal_grid,
             width,
             height,
             rng,
+        };
+
+        for y in 0..height {
+            for x in 0..width {
+                if x == 0 || x == width - 1 || y == 0 || y == height - 1 {
+                    let border_particle = Particle::new(ParticleType::Border, &mut new_world.rng);
+                    new_world.put_particle((x, y), border_particle);
+                }
+            }
         }
+
+        new_world
     }
 
     pub fn width(&self) -> usize {
@@ -172,10 +174,6 @@ impl World {
 
     pub fn height(&self) -> usize {
         self.height
-    }
-
-    pub fn particle_at(&self, xy: (usize, usize)) -> &Particle {
-        &self.particle_grid[xy]
     }
 
     // ─── Update Methods ──────────────────────────────────────────────────────────────────
@@ -207,7 +205,7 @@ impl World {
             // let idx = *idx;
             let xy = self.index_to_xy(idx);
 
-            let mut particle_clone = self.particle_grid[xy].clone();
+            let mut particle_clone = self.get_particle(xy).clone();
 
             if particle_clone.particle_type == ParticleType::Empty || particle_clone.updated {
                 continue;
@@ -224,16 +222,18 @@ impl World {
         xy: (usize, usize),
         replace: bool,
     ) {
-        let old_particle_type = self.particle_grid[xy].particle_type;
+        let old_particle_type = self.get_particle(xy).particle_type;
 
         match (new_particle_type, old_particle_type) {
             (_, ParticleType::Border) => {}
             (ParticleType::Empty, _) | (_, ParticleType::Empty) => {
-                self.particle_grid[xy] = Particle::new(new_particle_type, &mut self.rng);
+                let new_particle = Particle::new(new_particle_type, &mut self.rng);
+                self.put_particle(xy, new_particle);
             }
             _ => {
                 if replace {
-                    self.particle_grid[xy] = Particle::new(new_particle_type, &mut self.rng);
+                    let new_particle = Particle::new(new_particle_type, &mut self.rng);
+                    self.put_particle(xy, new_particle);
                 }
             }
         }
@@ -299,13 +299,12 @@ impl World {
     pub fn draw_and_reset_all_particles(&mut self, painter: &mut Painter) {
         for y in 0..self.height {
             for x in 0..self.width {
-                // self.particle_grid[(x, y)].draw_and_refresh(x, y, painter);
-                self.particle_grid[(x, y)].refresh();
+                self.get_particle_mut((x, y)).refresh();
                 painter.update_image_with_particle(
                     x,
                     y,
                     self.width,
-                    self.particle_grid[(x, y)].color,
+                    self.get_particle((x, y)).color,
                 );
             }
         }
@@ -330,13 +329,24 @@ impl World {
         (i % self.width, i / self.width)
     }
 
+    fn get_particle(&self, xy: (usize, usize)) -> &Particle {
+        &self.particle_grid[xy]
+    }
+
+    fn get_particle_mut(&mut self, xy: (usize, usize)) -> &mut Particle {
+        &mut self.particle_grid[xy]
+    }
+
+    fn put_particle(&mut self, xy: (usize, usize), particle: Particle) {
+        self.particle_grid[xy] = particle;
+    }
+
     fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
-        &self.particle_grid[self.relative_xy(xy, dxdy)]
+        self.get_particle(self.relative_xy(xy, dxdy))
     }
 
     fn relative_particle_mut(&mut self, xy: (usize, usize), dxdy: (isize, isize)) -> &mut Particle {
-        let (new_x, new_y) = self.relative_xy(xy, dxdy);
-        self.particle_grid.get_mut(new_x, new_y).unwrap()
+        self.get_particle_mut(self.relative_xy(xy, dxdy))
     }
 
     fn relative_xy(&self, xy: (usize, usize), dxdy: (isize, isize)) -> (usize, usize) {
@@ -363,99 +373,6 @@ impl World {
         )
     }
 }
-
-// pub fn iterate_over_line<F>(xy1: (usize, usize), xy2: (usize, usize), mut iter_function: F)
-// where
-//     F: FnMut(usize, usize),
-// {
-//     if xy1 == xy2 {
-//         // invoke function on xy1
-//         iter_function(xy1.0, xy1.1);
-//         return;
-//     }
-
-//     let dx = xy1.0 as isize - xy2.0 as isize;
-//     let dy = xy1.1 as isize - xy2.1 as isize;
-
-//     let dx_is_larger = dx.abs() > dy.abs();
-
-//     let x_modifier = if dx < 0 { 1 } else { -1 };
-//     let y_modifier = if dy < 0 { 1 } else { -1 };
-
-//     let longer_side_length = isize::max(dx.abs(), dy.abs());
-//     let shorter_side_length = isize::min(dx.abs(), dy.abs());
-
-//     let slope = if shorter_side_length == 0 || longer_side_length == 0 {
-//         0.0
-//     } else {
-//         shorter_side_length as f32 / longer_side_length as f32
-//     };
-
-//     let mut shorter_side_increase;
-//     for i in 1..=longer_side_length {
-//         shorter_side_increase = (i as f32 * slope).round() as isize;
-//         let (x_increase, y_increase) = if dx_is_larger {
-//             (i, shorter_side_increase)
-//         } else {
-//             (shorter_side_increase, i)
-//         };
-
-//         let current_x = (xy1.0 as isize + (x_increase * x_modifier)) as usize;
-//         let current_y = (xy1.1 as isize + (y_increase * y_modifier)) as usize;
-//         // Invoke function (if within bounds?)
-//         iter_function(current_x, current_y);
-//     }
-// }
-
-// pub fn iterate_over_line_delta<F>(dxdy: (isize, isize), mut iter_function: F)
-// where
-//     F: FnMut(isize, isize) -> bool,
-// {
-//     // Not sure I we should be doing this here.
-//     if dxdy == (0, 0) {
-//         // invoke function on xy1
-//         iter_function(dxdy.0, dxdy.1);
-//         return;
-//     }
-
-//     let (dx, dy) = dxdy;
-
-//     let dx_is_larger = dx.abs() > dy.abs();
-
-//     let x_modifier = if dx < 0 { 1 } else { -1 };
-//     let y_modifier = if dy < 0 { 1 } else { -1 };
-
-//     let longer_side_length = isize::max(dx.abs(), dy.abs());
-//     let shorter_side_length = isize::min(dx.abs(), dy.abs());
-
-//     let slope = if shorter_side_length == 0 || longer_side_length == 0 {
-//         0.0
-//     } else {
-//         shorter_side_length as f32 / longer_side_length as f32
-//     };
-
-//     let mut prev_x = 0;
-//     let mut prev_y = 0;
-//     let mut shorter_side_increase;
-//     for i in 1..=longer_side_length {
-//         shorter_side_increase = (i as f32 * slope).round() as isize;
-//         let (x_increase, y_increase) = if dx_is_larger {
-//             (i, shorter_side_increase)
-//         } else {
-//             (shorter_side_increase, i)
-//         };
-
-//         let current_x = x_increase * x_modifier;
-//         let current_y = y_increase * y_modifier;
-//         let delta_x = current_x - prev_x;
-//         let delta_y = current_y - prev_y;
-//         if !iter_function(delta_x, delta_y) {
-//             break;
-//         };
-//         prev_x = current_x;
-//         prev_y = current_y;
-//     }
-// }
 
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 // Adapted from https://gist.github.com/DavidMcLaughlin208/60e69e698e3858617c322d80a8f174e2
