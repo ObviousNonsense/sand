@@ -1,8 +1,5 @@
 use egui_macroquad::{egui, egui::RichText, *};
-use macroquad::{
-    color::{hsl_to_rgb, rgb_to_hsl},
-    prelude::*,
-};
+use macroquad::prelude::*;
 use particle::*;
 use std::iter::Cycle;
 use world::*;
@@ -444,11 +441,11 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 if let Some(xy1) = settings.draw_xy1 {
                     fill_brush_along_line(settings, world, xy1, (mousex, mousey));
                     settings.draw_xy1 = Some((mousex, mousey));
-                } else {
-                    highlight_brush(
-                        settings, world, brushx_min, brushx_max, brushy_min, brushy_max,
-                    );
                 }
+
+                highlight_brush(
+                    settings, world, brushx_min, brushx_max, brushy_min, brushy_max,
+                );
             }
 
             DrawingStyle::Portal => {
@@ -750,12 +747,12 @@ fn create_placeable(settings: &mut Settings, world: &mut World, xy: (usize, usiz
     }
 }
 
-fn debug_particle_string(world: &World, painter: &Painter) -> String {
-    // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
-    let (x, y) = painter.mouse_location(world.width(), world.height());
-    let p = world.particle_at((x, y));
-    format!("({}, {}): {:#?}", x, y, p)
-}
+// fn debug_particle_string(world: &World, painter: &Painter) -> String {
+//     // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
+//     let (x, y) = painter.mouse_location(world.width(), world.height());
+//     let p = world.particle_at((x, y));
+//     format!("({}, {}): {:#?}", x, y, p)
+// }
 
 #[derive(Debug, PartialEq)]
 enum DrawingStyle {
