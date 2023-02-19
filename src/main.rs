@@ -138,26 +138,26 @@ async fn main() {
 
 #[derive(Debug)]
 struct Settings {
+    debug_mode: bool,
     paused: bool,
     brush_size: f32,
     display_fps: bool,
     placeable_selector: PlaceableSelector,
+    drawing_style: DrawingStyle,
     sources_replace: bool,
     placement_type: ParticleType,
     last_placement_type: ParticleType,
     delete: bool,
     replace: bool,
-    debug_mode: bool,
     portal_direction: Direction,
     last_portal_placed: Vec<(usize, usize)>,
     waiting_for_partner_portal: bool,
-    new_pixels_per_particle: f32,
-    new_size: (usize, usize),
-    painter: Painter,
-    drawing_style: DrawingStyle,
-    draw_xy1: Option<(usize, usize)>,
-    portal_placement_valid: bool,
     portal_color: PColor,
+    draw_xy1: Option<(usize, usize)>,
+    new_size: (usize, usize),
+    portal_placement_valid: bool,
+    new_pixels_per_particle: f32,
+    painter: Painter,
     portal_color_cycle: Cycle<std::vec::IntoIter<PColor>>,
 }
 
@@ -407,20 +407,21 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                     if let Some(xy1) = settings.draw_xy1 {
                         // If we clicked and the first point has already been set,
                         // create particles along the line
-                        create_particle(settings, world, xy1);
-                        iterate_over_line(xy1, (mousex, mousey), |x, y| {
-                            create_particle(settings, world, (x, y));
-                        });
+                        fill_brush_along_line(settings, world, xy1, (mousex, mousey));
                         settings.draw_xy1 = None;
                     } else {
                         // If we clicked and the first point hasn't been set, set
                         // the first point
                         settings.draw_xy1 = Some((mousex, mousey));
                     }
-                } else if let Some(xy1) = settings.draw_xy1 {
+                }
+                if let Some(xy1) = settings.draw_xy1 {
                     // If we haven't clicked and the first point has been set,
                     // highlight along the line
                     // highlight_particle_brush(settings, xy1.0, xy1.1);
+                    highlight_brush(
+                        settings, world, brushx_min, brushx_max, brushy_min, brushy_max,
+                    );
                     iterate_over_line(xy1, (mousex, mousey), |x, y| {
                         let (px, py) = settings.painter.xy_to_pixels(x, y);
                         let (brushx_min, brushx_max, brushy_min, brushy_max) =
@@ -431,19 +432,15 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                                 world.width(),
                                 world.height(),
                             );
-                        apply_fn_in_square(
-                            brushx_min,
-                            brushx_max,
-                            brushy_min,
-                            brushy_max,
-                            world.width(),
-                            world.height(),
-                            |x, y| highlight_brush(settings, x, y),
-                        )
+                        highlight_brush(
+                            settings, world, brushx_min, brushx_max, brushy_min, brushy_max,
+                        );
                     })
                 } else {
                     // Highlight the particle brush as normal otherwise.
-                    highlight_particle_brush(settings, mousex, mousey);
+                    highlight_brush(
+                        settings, world, brushx_min, brushx_max, brushy_min, brushy_max,
+                    );
                 }
             }
 
@@ -457,57 +454,17 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 }
 
                 if let Some(xy1) = settings.draw_xy1 {
-                    iterate_over_line(xy1, (mousex, mousey), |x, y| {
-                        let (px, py) = settings.painter.xy_to_pixels(x, y);
-                        let (brushx_min, brushx_max, brushy_min, brushy_max) =
-                            settings.painter.calculate_brush(
-                                px,
-                                py,
-                                settings.brush_size,
-                                world.width(),
-                                world.height(),
-                            );
-                        apply_fn_in_square(
-                            brushx_min,
-                            brushx_max,
-                            brushy_min,
-                            brushy_max,
-                            world.width(),
-                            world.height(),
-                            |x, y| {
-                                if settings.delete {
-                                    world.delete_source((x, y));
-                                    world.add_new_particle(
-                                        ParticleType::Empty,
-                                        (x, y),
-                                        settings.replace,
-                                    );
-                                } else {
-                                    create_placeable(settings, world, (x, y), mousex, mousey);
-                                }
-                            },
-                        );
-                    });
+                    fill_brush_along_line(settings, world, xy1, (mousex, mousey));
                     settings.draw_xy1 = Some((mousex, mousey));
                 } else {
-                    apply_fn_in_square(
-                        brushx_min,
-                        brushx_max,
-                        brushy_min,
-                        brushy_max,
-                        world.width(),
-                        world.height(),
-                        |x, y| highlight_brush(settings, x, y),
+                    highlight_brush(
+                        settings, world, brushx_min, brushx_max, brushy_min, brushy_max,
                     );
                 }
-
-                // highlight_and_fill_brush(
-                //     settings, world, brushx_min, brushx_max, brushy_min, brushy_max, mousex, mousey,
-                // );
             }
 
             DrawingStyle::Portal => {
-                let (brushx_min, brushx_max, brushy_min, brushy_max) = settings
+                let (mut brushx_min, mut brushx_max, mut brushy_min, mut brushy_max) = settings
                     .painter
                     .calculate_brush(px, py, settings.brush_size, world.width(), world.height());
 
@@ -515,6 +472,8 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                 settings.portal_placement_valid = true;
                 match settings.portal_direction {
                     Direction::Up | Direction::Down => {
+                        brushy_min = mousey;
+                        brushy_max = mousey + 1;
                         for x in brushx_min..brushx_max {
                             if x < 1
                                 || x >= world.width() - 1
@@ -526,6 +485,8 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                         }
                     }
                     Direction::Right | Direction::Left => {
+                        brushx_min = mousex;
+                        brushx_max = mousex + 1;
                         for y in brushy_min..brushy_max {
                             if y < 1
                                 || y >= world.width() - 1
@@ -537,9 +498,16 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
                         }
                     }
                 }
-                highlight_and_fill_brush(
-                    settings, world, brushx_min, brushx_max, brushy_min, brushy_max, mousex, mousey,
-                );
+
+                if is_mouse_button_pressed(MouseButton::Left) {
+                    fill_brush(
+                        settings, world, brushx_min, brushx_max, brushy_min, brushy_max,
+                    );
+                } else {
+                    highlight_brush(
+                        settings, world, brushx_min, brushx_max, brushy_min, brushy_max,
+                    );
+                }
             }
         }
     }
@@ -599,53 +567,83 @@ fn apply_fn_in_square<F>(
     }
 }
 
-fn highlight_and_fill_brush(
+fn fill_brush_along_line(
+    settings: &mut Settings,
+    world: &mut World,
+    xy1: (usize, usize),
+    xy2: (usize, usize),
+) {
+    iterate_over_line(xy1, xy2, |x, y| {
+        let (px, py) = settings.painter.xy_to_pixels(x, y);
+        let (brushx_min, brushx_max, brushy_min, brushy_max) = settings.painter.calculate_brush(
+            px,
+            py,
+            settings.brush_size,
+            world.width(),
+            world.height(),
+        );
+
+        fill_brush(
+            settings, world, brushx_min, brushx_max, brushy_min, brushy_max,
+        );
+    });
+}
+
+fn fill_brush(
     settings: &mut Settings,
     world: &mut World,
     brushx_min: usize,
     brushx_max: usize,
     brushy_min: usize,
     brushy_max: usize,
-    mousex: usize,
-    mousey: usize,
 ) {
-    // println!("Brush span = {}", brush_span);
-    for x in brushx_min..brushx_max {
-        // println!("x = {}", x);
-        if x >= world.width() {
-            continue;
-        }
-        for y in brushy_min..brushy_max {
-            if y >= world.height() {
-                continue;
+    apply_fn_in_square(
+        brushx_min,
+        brushx_max,
+        brushy_min,
+        brushy_max,
+        world.width(),
+        world.height(),
+        |x, y| {
+            if settings.delete {
+                world.delete_source((x, y));
+                world.add_new_particle(ParticleType::Empty, (x, y), settings.replace);
+            } else {
+                create_placeable(settings, world, (x, y));
             }
-
-            // Highlight brush
-            highlight_brush(settings, x, y);
-
-            // Add particles on left click
-            if is_mouse_button_down(MouseButton::Left) {
-                if settings.delete {
-                    world.delete_source((x, y));
-                    world.add_new_particle(ParticleType::Empty, (x, y), settings.replace);
-                } else {
-                    create_placeable(settings, world, (x, y), mousex, mousey);
-                }
-            }
-        }
-    }
+        },
+    );
 }
 
-fn highlight_particle_brush(settings: &Settings, x: usize, y: usize) {
+fn highlight_brush(
+    settings: &mut Settings,
+    world: &mut World,
+    brushx_min: usize,
+    brushx_max: usize,
+    brushy_min: usize,
+    brushy_max: usize,
+) {
+    apply_fn_in_square(
+        brushx_min,
+        brushx_max,
+        brushy_min,
+        brushy_max,
+        world.width(),
+        world.height(),
+        |x, y| highlight_selected_placeable(settings, x, y),
+    );
+}
+
+fn highlight_particle(settings: &Settings, x: usize, y: usize) {
     let mut color: Color = settings.placement_type.properties().base_color.into();
     color.a = 0.4;
     settings.painter.draw_particle(x, y, color);
 }
 
-fn highlight_brush(settings: &Settings, x: usize, y: usize) {
+fn highlight_selected_placeable(settings: &Settings, x: usize, y: usize) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
-            highlight_particle_brush(settings, x, y);
+            highlight_particle(settings, x, y);
         }
         PlaceableSelector::Source => {
             let mut color: Color = settings.placement_type.properties().base_color.into();
@@ -671,18 +669,7 @@ fn highlight_brush(settings: &Settings, x: usize, y: usize) {
             if !settings.portal_placement_valid {
                 return;
             }
-            // match settings.portal_direction {
-            //     Direction::Up | Direction::Down => {
-            //         if y != mousey {
-            //             return;
-            //         }
-            //     }
-            //     Direction::Right | Direction::Left => {
-            //         if x != mousex {
-            //             return;
-            //         }
-            //     }
-            // }
+
             let mut color: Color = settings.portal_color.into();
             color.a = 0.4;
             settings
@@ -696,13 +683,7 @@ fn create_particle(settings: &Settings, world: &mut World, xy: (usize, usize)) {
     world.add_new_particle(settings.placement_type, xy, settings.replace);
 }
 
-fn create_placeable(
-    settings: &mut Settings,
-    world: &mut World,
-    xy: (usize, usize),
-    mousex: usize,
-    mousey: usize,
-) {
+fn create_placeable(settings: &mut Settings, world: &mut World, xy: (usize, usize)) {
     match settings.placeable_selector {
         PlaceableSelector::Particle => {
             create_particle(settings, world, xy);
@@ -723,19 +704,6 @@ fn create_placeable(
                 return;
             }
 
-            match settings.portal_direction {
-                Direction::Up | Direction::Down => {
-                    if xy.1 != mousey {
-                        return;
-                    }
-                }
-                Direction::Right | Direction::Left => {
-                    if xy.0 != mousex {
-                        return;
-                    }
-                }
-            }
-
             if settings.debug_mode {
                 println!(
                     "Before: waiting for partner = {}",
@@ -744,11 +712,7 @@ fn create_placeable(
             }
 
             let partner_xy = if settings.waiting_for_partner_portal {
-                // let mut color = rgb_to_hsl(settings.portal_color);
-                // color.1 += 0.01;
-                // color.2 += 0.01;
-                // settings.portal_color = hsl_to_rgb(color.0, color.1, color.2);
-                settings.portal_color.add_hsv(0.0, 0.01, 0.01);
+                settings.portal_color = settings.portal_color.add_hsv(0.0, 0.0, 0.02);
                 settings.last_portal_placed.pop()
             } else {
                 None
@@ -766,11 +730,7 @@ fn create_placeable(
             if added {
                 if !settings.waiting_for_partner_portal {
                     settings.last_portal_placed.push(xy);
-                    // let mut color = rgb_to_hsl(settings.portal_color);
-                    // color.1 -= 0.01;
-                    // color.2 -= 0.01;
-                    // settings.portal_color = hsl_to_rgb(color.0, color.1, color.2);
-                    settings.portal_color.add_hsv(0.0, -0.01, -0.01);
+                    settings.portal_color = settings.portal_color.add_hsv(0.0, 0.0, -0.02);
                 } else if settings.last_portal_placed.is_empty() {
                     settings.portal_color = settings.portal_color_cycle.next().unwrap();
                     settings.waiting_for_partner_portal = false;
