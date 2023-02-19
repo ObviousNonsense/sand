@@ -17,7 +17,7 @@ pub struct ParticleTypeProperties {
     pub base_durability: Option<i16>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ParticleType {
     Border = 0,
@@ -246,7 +246,7 @@ impl Deleted {
 }
 
 // #[derive(Debug)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Particle {
     pub particle_type: ParticleType,
     pub updated: bool,
@@ -371,7 +371,7 @@ impl Particle {
         }
 
         if deleted == Deleted::False {
-            self.updated = true;
+            // self.updated = true;
             api.update_in_world(self.to_owned());
         }
     }
@@ -698,7 +698,7 @@ impl Particle {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PColor {
     pub r: u8,
     pub g: u8,
