@@ -11,7 +11,6 @@ pub struct ParticleTypeProperties {
     pub auto_move: bool,
     pub fluid: bool,
     pub dispersion_rate: Option<u8>,
-    pub condensates: bool,
     pub flammability: f32,
     pub wet_flammability: Option<f32>,
     pub base_fuel: Option<i16>,
@@ -46,7 +45,6 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: false,
         fluid: false,
         dispersion_rate: None,
-        condensates: false,
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
@@ -61,7 +59,6 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: false,
         fluid: false,
         dispersion_rate: None,
-        condensates: false,
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
@@ -76,7 +73,6 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: false,
         fluid: false,
         dispersion_rate: None,
-        condensates: false,
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
@@ -91,7 +87,6 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: true,
         fluid: false,
         dispersion_rate: None,
-        condensates: false,
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
@@ -106,7 +101,6 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: true,
         fluid: true,
         dispersion_rate: Some(5),
-        condensates: false,
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
@@ -120,8 +114,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: false,
         fluid: true,
-        dispersion_rate: None,
-        condensates: true,
+        dispersion_rate: Some(10),
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
@@ -136,7 +129,6 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: false,
         fluid: false,
         dispersion_rate: None,
-        condensates: false,
         flammability: 0.125,
         wet_flammability: Some(0.015),
         base_fuel: Some(35),
@@ -151,7 +143,6 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: false,
         fluid: false,
         dispersion_rate: None,
-        condensates: false,
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: Some(0),
@@ -165,8 +156,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: true,
-        dispersion_rate: None,
-        condensates: false,
+        dispersion_rate: Some(7),
         flammability: 0.95,
         wet_flammability: None,
         base_fuel: Some(6),
@@ -181,7 +171,6 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: true,
         fluid: false,
         dispersion_rate: None,
-        condensates: false,
         flammability: 0.6,
         wet_flammability: None,
         base_fuel: Some(35),
@@ -195,8 +184,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: true,
-        dispersion_rate: None,
-        condensates: false,
+        dispersion_rate: Some(10),
         flammability: 0.9,
         wet_flammability: None,
         base_fuel: Some(25),
@@ -211,7 +199,6 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: false,
         fluid: false,
         dispersion_rate: None,
-        condensates: false,
         flammability: 0.1,
         wet_flammability: None,
         base_fuel: Some(200),
@@ -225,8 +212,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: false,
         fluid: true,
-        dispersion_rate: None,
-        condensates: false,
+        dispersion_rate: Some(1),
         flammability: 0.0,
         wet_flammability: None,
         base_fuel: None,
@@ -292,8 +278,8 @@ impl Particle {
             None
         };
 
-        let condensation_countdown = if particle_type.properties().condensates {
-            Some(100 + rng.gen_range(-30..30))
+        let condensation_countdown = if particle_type == ParticleType::Steam {
+            Some(300 + rng.gen_range(-100..100))
         } else {
             None
         };
@@ -346,88 +332,13 @@ impl Particle {
         let false_premove =
             |_self: &mut Self, _dxdy: (isize, isize), _api: &mut WorldApi| Deleted::False;
 
-        if self.particle_type.properties().moves
-            && self.particle_type.properties().auto_move
-            && self.particle_type != ParticleType::Water
+        if self.particle_type.properties().moves && self.particle_type.properties().auto_move
+        // && self.particle_type != ParticleType::Water
         {
             deleted.update(self.movement(&mut api, false_premove));
         }
 
         match self.particle_type {
-            ParticleType::Water => {
-                let dispersion_rate =
-                    self.particle_type.properties().dispersion_rate.unwrap() as isize;
-                // let dispersion_rate = api.random_range(
-                //     self.particle_type.properties().dispersion_rate.unwrap() as isize - 1
-                //         ..=self.particle_type.properties().dispersion_rate.unwrap() as isize,
-                // );
-                let (check_directions, last_dir) = if self.moving_right.unwrap() {
-                    (
-                        vec![
-                            (0, 1),
-                            (1, 1),
-                            (-1, 1),
-                            (dispersion_rate, 0),
-                            (-dispersion_rate, 0),
-                        ],
-                        (-dispersion_rate, 0),
-                    )
-                } else {
-                    (
-                        vec![
-                            (0, 1),
-                            (-1, 1),
-                            (1, 1),
-                            (-dispersion_rate, 0),
-                            (dispersion_rate, 0),
-                        ],
-                        (dispersion_rate, 0),
-                    )
-                };
-
-                let mut last_dxdy = None;
-                for dxdy in check_directions.into_iter() {
-                    //
-                    let dxdy_new: (isize, isize) = dxdy;
-                    if dxdy_new.0.abs() > 1 || dxdy_new.1.abs() > 1 {
-                        iterate_over_line_delta(dxdy_new, |dx, dy| {
-                            let (_, other_type) = self.try_moving_to((dx, dy), &mut api);
-                            if let Some(other_type) = other_type {
-                                if other_type == ParticleType::Empty {
-                                    if api.neighbour((0, 1)).particle_type == ParticleType::Empty
-                                        && api.neighbour((dx.signum(), 1)).particle_type
-                                            == ParticleType::Empty
-                                    {
-                                        return false;
-                                    }
-                                    return true;
-                                } else {
-                                    return false;
-                                }
-                            }
-                            false
-                        })
-                    } else {
-                        self.try_moving_to(dxdy_new, &mut api);
-                    }
-
-                    if self.moved.unwrap() {
-                        last_dxdy = Some(dxdy);
-                        break;
-                    }
-                }
-
-                if let Some(last_dxdy) = last_dxdy {
-                    if last_dxdy == (-1, 1) {
-                        self.moving_right = Some(false)
-                    }
-                    if last_dxdy == (1, 1) {
-                        self.moving_right = Some(true)
-                    } else if last_dxdy == last_dir {
-                        self.moving_right = Some(!self.moving_right.unwrap());
-                    }
-                }
-            }
             ParticleType::Steam => {
                 let lasty = api.xy().1;
                 self.movement(&mut api, false_premove);
@@ -678,12 +589,16 @@ impl Particle {
         F: Fn(&mut Self, (isize, isize), &mut WorldApi) -> Deleted,
     {
         //
+        let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(1) as isize;
         for dxdy in check_directions.into_iter() {
             //
-            let dxdy_new = if self.rises() {
-                (dxdy.0, -dxdy.1)
+
+            let r = if self.rises() { -1 } else { 1 };
+
+            let dxdy_new = if dxdy.1 == 0 {
+                (dispersion_rate * dxdy.0, dxdy.1)
             } else {
-                dxdy
+                (dxdy.0, r * dxdy.1)
             };
 
             let deleted = premove_function(self, dxdy, api);
@@ -691,13 +606,37 @@ impl Particle {
             if deleted == Deleted::True {
                 return (deleted, None);
             } else {
-                let (moved, _) = self.try_moving_to(dxdy_new, api);
-                if moved {
+                if dxdy_new.0.abs() > 1 {
+                    self.disperse(dxdy_new, api);
+                } else {
+                    self.try_moving_to(dxdy_new, api);
+                }
+                if self.moved.unwrap() {
                     return (deleted, Some(dxdy));
                 }
             }
         }
         (Deleted::False, None)
+    }
+
+    fn disperse(&mut self, dxdy: (isize, isize), api: &mut WorldApi) {
+        iterate_over_line_delta(dxdy, |dx, dy| {
+            let other_type = self.try_moving_to((dx, dy), api);
+            if let Some(other_type) = other_type {
+                if other_type == ParticleType::Empty {
+                    let r = if self.rises() { -1 } else { 1 };
+                    if api.neighbour((0, r)).particle_type == ParticleType::Empty
+                        && api.neighbour((dx.signum(), r)).particle_type == ParticleType::Empty
+                    {
+                        return false;
+                    }
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+            false
+        })
     }
 
     fn try_decaying(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> Deleted {
@@ -722,11 +661,7 @@ impl Particle {
 
     /// Checks if this particle can and will move in the given direction.
     /// Assumes that if it can move there it will (sets self.moved to true)
-    fn try_moving_to(
-        &mut self,
-        dxdy: (isize, isize),
-        api: &mut WorldApi,
-    ) -> (bool, Option<ParticleType>) {
+    fn try_moving_to(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> Option<ParticleType> {
         // let rand_factor = api.random::<f32>();
         let other_p = api.neighbour(dxdy);
         let other_weight = api.neighbour(dxdy).particle_type.properties().weight;
@@ -739,7 +674,7 @@ impl Particle {
             if dxdy.1 == 0 || self.weight_check(api, other_weight) {
                 self.moved = Some(true);
                 api.swap_with(dxdy);
-                return (true, Some(other_type));
+                return Some(other_type);
             }
         } else if other_p.particle_type.properties().moves && !other_p.moved.unwrap() {
             // If there's something there and it's moveable and it hasn't
@@ -749,10 +684,10 @@ impl Particle {
                 other_p_mut.moved = Some(true);
                 self.moved = Some(true);
                 api.swap_with(dxdy);
-                return (true, Some(other_type));
+                return Some(other_type);
             }
         }
-        (false, None)
+        None
     }
 
     fn weight_check(&self, api: &mut WorldApi, other_weight: f32) -> bool {
