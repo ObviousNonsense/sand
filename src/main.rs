@@ -73,6 +73,7 @@ async fn main() {
         portal_color_cycle: color_cycle,
         new_pixels_per_particle: painter.pixels_per_particle,
         new_size: (world_width, world_height),
+        mouse_over_gui: false,
         painter,
         drawing_style: DrawingStyle::Brush,
         draw_xy1: None,
@@ -157,6 +158,7 @@ struct Settings {
     new_size: (usize, usize),
     portal_placement_valid: bool,
     new_pixels_per_particle: f32,
+    mouse_over_gui: bool,
     painter: Painter,
     portal_color_cycle: Cycle<std::vec::IntoIter<PColor>>,
 }
@@ -365,27 +367,13 @@ impl Painter {
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
 fn handle_input(settings: &mut Settings, world: &mut World) {
-    // Change particle placement type with number keys
-    if is_key_pressed(KeyCode::Key1) {
-        settings.placement_type = ParticleType::Sand;
-        println!("Placement Type: Sand")
-    } else if is_key_pressed(KeyCode::Key2) {
-        settings.placement_type = ParticleType::Water;
-        println!("Placement Type: Water")
-    } else if is_key_pressed(KeyCode::Key3) {
-        settings.placement_type = ParticleType::Concrete;
-        println!("Placement Type: Concrete")
-    } else if is_key_pressed(KeyCode::Key0) {
-        settings.placement_type = ParticleType::Empty;
-        println!("Placement Type: Empty")
-    }
-
     let (px, py) = mouse_position();
 
     if px > settings.painter.world_px0
         && px < screen_width()
         && py > settings.painter.world_py0
         && py < screen_height()
+        && !settings.mouse_over_gui
     {
         let (mousex, mousey) = settings
             .painter
@@ -806,6 +794,12 @@ impl PlaceableSelector {
 }
 
 fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps: f64) {
+    if ctx.wants_pointer_input() || ctx.is_pointer_over_area() {
+        settings.mouse_over_gui = true;
+    } else {
+        settings.mouse_over_gui = false;
+    }
+
     egui::Window::new("")
         // .resizable(false)
         .title_bar(false)
