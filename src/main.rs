@@ -21,9 +21,15 @@ fn window_conf() -> Conf {
     }
 }
 
+// #[cfg(feature = "dhat-heap")]
+// #[global_allocator]
+// static ALLOC: dhat::Alloc = dhat::Alloc;
+
 // ─── Main ──────────────────────────────────────────────────────────────────────────────────── ✣ ─
+// #[cfg(feature = "dhat-heap")]
 #[macroquad::main(window_conf)]
 async fn main() {
+    // let _profiler = dhat::Profiler::new_heap();
     // color_eyre::install()?;
 
     let mut color_cycle: Cycle<std::vec::IntoIter<particle::PColor>> = vec![
@@ -88,6 +94,9 @@ async fn main() {
     let mut fps = 0.0;
 
     loop {
+        // unsafe {
+        //     macroquad::window::get_internal_gl().flush();
+        // }
         let time = get_time();
         let frame_time = time - tic;
         egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut world, fps));
@@ -202,6 +211,7 @@ pub struct Painter {
     world_py0: f32,
     pixels_per_particle: f32,
     screen_buffer: Vec<u8>,
+    screen_texture: Texture2D,
 }
 
 impl core::fmt::Debug for Painter {
@@ -226,11 +236,16 @@ impl Painter {
             .take(4 * world_width * world_height)
             .collect();
 
+        let screen_texture =
+            Texture2D::from_rgba8(world_width as u16, world_height as u16, &screen_buffer);
+        screen_texture.set_filter(FilterMode::Nearest);
+
         Self {
             world_px0,
             world_py0,
             pixels_per_particle,
             screen_buffer,
+            screen_texture,
         }
     }
 
@@ -290,24 +305,24 @@ impl Painter {
 
     fn update_image_with_particle(&mut self, x: usize, y: usize, width: usize, color: PColor) {
         let idx = x + y * width;
-
         self.screen_buffer[4 * idx] = color.r;
         self.screen_buffer[4 * idx + 1] = color.g;
         self.screen_buffer[4 * idx + 2] = color.b;
         // self.screen_buffer[4 * idx] = 255;
-
-        // for (n, m) in ((4 * idx)..(4 * (idx + 1))).zip(0..4) {
-        //     self.screen_buffer[n] = bytes[m];
-        // }
-        // self.screen_buffer.splice((4 * idx)..(4 * (idx + 1)), bytes);
     }
 
-    fn draw_screen(&self, world_width: usize, world_height: usize) {
-        let tex =
-            Texture2D::from_rgba8(world_width as u16, world_height as u16, &self.screen_buffer);
-        tex.set_filter(FilterMode::Nearest);
+    fn draw_screen(&mut self, world_width: u16, world_height: u16) {
+        // Don't try to create a new texture every frame - causes memory leak
+        let image = Image {
+            bytes: self.screen_buffer.clone(),
+            width: world_width,
+            height: world_height,
+        };
+
+        self.screen_texture.update(&image);
+
         draw_texture_ex(
-            tex,
+            self.screen_texture,
             self.world_px0,
             self.world_py0,
             WHITE,
@@ -318,7 +333,13 @@ impl Painter {
                 )),
                 ..Default::default()
             },
-        )
+        );
+        // build_textures_atlas();
+        // tex.delete();
+        // unsafe {
+        //     // macroquad::window::get_internal_gl().flush();
+        //     miniquad::native::gl::glFlush();
+        // };
     }
 
     fn debug_chunk(&self, x: usize, y: usize, width: usize, height: usize, text: &str) {

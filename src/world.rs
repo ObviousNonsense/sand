@@ -438,7 +438,7 @@ impl World {
             }
         }
 
-        painter.draw_screen(self.width, self.height);
+        painter.draw_screen(self.width as u16, self.height as u16);
 
         if debug_chunks {
             for chunk_x in 0..num_chunks_x {
