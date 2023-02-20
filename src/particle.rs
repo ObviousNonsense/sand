@@ -81,7 +81,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Sand = 3
     ParticleTypeProperties {
         label: "Sand",
-        base_color: PColor::new(251, 250, 74),
+        base_color: PColor::new(226, 188, 128),
         weight: 90.0,
         moves: true,
         auto_move: true,
@@ -193,7 +193,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Wood = 11
     ParticleTypeProperties {
         label: "Wood",
-        base_color: PColor::new(87, 56, 46),
+        base_color: PColor::new(98, 57, 35),
         weight: f32::INFINITY,
         moves: false,
         auto_move: false,
@@ -673,11 +673,13 @@ impl Particle {
         let other_weight = api.neighbour(dxdy).particle_type.properties().weight;
 
         let other_type = other_p.particle_type;
+        let my_weight = self.particle_type.properties().weight;
+        let rises = self.rises();
 
         // If the other position is empty, try moving into it
         if other_type == ParticleType::Empty {
             // If we're moving sideways don't compare weights, just do it
-            if dxdy.1 == 0 || self.weight_check(api, other_weight) {
+            if dxdy.1 == 0 || Particle::weight_check(api, rises, my_weight, other_weight) {
                 self.moved = Some(true);
                 api.swap_with(dxdy);
                 return Some(other_type);
@@ -685,7 +687,7 @@ impl Particle {
         } else if other_p.particle_type.properties().moves && !other_p.moved.unwrap() {
             // If there's something there and it's moveable and it hasn't
             // already moved, then we might swap with it
-            if self.weight_check(api, other_weight) {
+            if Particle::weight_check(api, rises, my_weight, other_weight) {
                 let other_p_mut = api.neighbour_mut(dxdy);
                 other_p_mut.moved = Some(true);
                 self.moved = Some(true);
@@ -696,11 +698,17 @@ impl Particle {
         None
     }
 
-    fn weight_check(&self, api: &mut WorldApi, other_weight: f32) -> bool {
-        (!self.rises()
-            && (self.particle_type.properties().weight * api.random::<f32>() > other_weight))
-            || (self.rises()
-                && (other_weight * api.random::<f32>() > self.particle_type.properties().weight))
+    // #[rustfmt::skip]
+    fn weight_check(api: &mut WorldApi, rises: bool, my_weight: f32, other_weight: f32) -> bool {
+        if rises && other_weight > my_weight {
+            api.might_update();
+            other_weight * api.random::<f32>() > my_weight
+        } else if !rises && my_weight > other_weight {
+            api.might_update();
+            my_weight * api.random::<f32>() > other_weight
+        } else {
+            false
+        }
     }
 }
 

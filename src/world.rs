@@ -527,15 +527,20 @@ impl World {
 
         // Wake up neighbouring chunk if we're within 2 spaces of it (and not on
         // the edge)
-        if local_x <= 1 && chunk_x != 0 {
+        let wake_range = 1;
+        if local_x <= wake_range - 1 && chunk_x != 0 {
             self.chunk_grid[(chunk_x - 1, chunk_y)].update_next_frame = true;
-        } else if local_x >= self.chunk_size - 2 && chunk_x != (self.width / self.chunk_size) - 1 {
+        } else if local_x >= self.chunk_size - wake_range
+            && chunk_x != (self.width / self.chunk_size) - 1
+        {
             self.chunk_grid[(chunk_x + 1, chunk_y)].update_next_frame = true;
         }
 
-        if local_y <= 0 && chunk_y != 0 {
+        if local_y <= wake_range - 1 && chunk_y != 0 {
             self.chunk_grid[(chunk_x, chunk_y - 1)].update_next_frame = true;
-        } else if local_y >= self.chunk_size - 2 && chunk_y != (self.height / self.chunk_size) - 1 {
+        } else if local_y >= self.chunk_size - wake_range
+            && chunk_y != (self.height / self.chunk_size) - 1
+        {
             self.chunk_grid[(chunk_x, chunk_y + 1)].update_next_frame = true;
         }
     }
