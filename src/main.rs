@@ -91,19 +91,18 @@ async fn main() {
         let time = get_time();
         let frame_time = time - tic;
         egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut world, fps));
+        keys_input(&mut settings, &mut world);
 
         if settings.painter.pixels_per_particle != settings.new_pixels_per_particle {
             settings.rescale();
         }
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
-        // clear_background(BLACK);
+        clear_background(BLACK);
         world.draw_and_refresh(&mut settings.painter, settings.debug_mode);
         // ─────────────────────────────────────────────────────────────────────────
 
-        // ─── Input ───────────────────────────────────────────────────────────────
-        handle_input(&mut settings, &mut world);
-        // ─────────────────────────────────────────────────────────────────────────
+        cursor_input(&mut settings, &mut world);
 
         if !LIMIT_UPDATE_RATE || frame_time >= MINIMUM_UPDATE_TIME {
             // ─── Limiting And Printing Fps ───────────────────────────────
@@ -375,7 +374,7 @@ impl Painter {
 }
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
-fn handle_input(settings: &mut Settings, world: &mut World) {
+fn cursor_input(settings: &mut Settings, world: &mut World) {
     let (px, py) = mouse_position();
 
     if px > settings.painter.world_px0
@@ -508,7 +507,9 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
             }
         }
     }
+}
 
+fn keys_input(settings: &mut Settings, world: &mut World) {
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
         println!("advance");

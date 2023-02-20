@@ -125,7 +125,7 @@ impl<'a> WorldApi<'a> {
 
     pub fn might_update(&mut self) {
         let (chunk_xy, local_xy) = self.world.global_xy_to_chunk_xy(self.xy);
-        self.world.wake_chunk_from(chunk_xy, local_xy);
+        self.world.wake_chunk_from_local(chunk_xy, local_xy);
     }
 }
 
@@ -157,8 +157,10 @@ impl WorldChunk {
     }
 
     fn refresh_all_particles(&mut self) {
-        for x in 0..self.particle_grid.row_len() {
-            for y in 0..self.particle_grid.column_len() {
+        // row_len() and column_len() seem wrong to me? Double check if ever
+        // switching to non-square chunks
+        for x in 0..self.particle_grid.column_len() {
+            for y in 0..self.particle_grid.row_len() {
                 self.particle_grid[(x, y)].refresh();
             }
         }
@@ -247,8 +249,8 @@ impl World {
     }
 
     fn shift_chunks_update_flag(&mut self) {
-        let num_chunks_x = self.chunk_grid.row_len();
-        let num_chunks_y = self.chunk_grid.column_len();
+        let num_chunks_x = self.chunk_grid.column_len();
+        let num_chunks_y = self.chunk_grid.row_len();
 
         for chunk_x in 0..num_chunks_x {
             for chunk_y in 0..num_chunks_y {
@@ -413,45 +415,35 @@ impl World {
         for chunk_x in 0..num_chunks_x {
             for chunk_y in 0..num_chunks_y {
                 self.chunk_grid[(chunk_x, chunk_y)].refresh_all_particles();
-                // if self.chunk_grid[(chunk_x, chunk_y)].update_this_frame {
-                for local_y in 0..self.chunk_size {
-                    for local_x in 0..self.chunk_size {
-                        let (global_x, global_y) =
-                            self.chunk_xy_to_global_xy((chunk_x, chunk_y), (local_x, local_y));
-                        // self.chunk_grid[(chunk_x, chunk_y)].particle_grid[(local_x, local_y)]
-                        //     .refresh();
-                        painter.update_image_with_particle(
-                            global_x,
-                            global_y,
-                            self.width,
-                            self.chunk_grid[(chunk_x, chunk_y)].particle_grid[(local_x, local_y)]
-                                .color,
-                        );
+                if self.chunk_grid[(chunk_x, chunk_y)].update_this_frame
+                    || self.chunk_grid[(chunk_x, chunk_y)].update_next_frame
+                {
+                    for local_y in 0..self.chunk_size {
+                        for local_x in 0..self.chunk_size {
+                            let (global_x, global_y) =
+                                self.chunk_xy_to_global_xy((chunk_x, chunk_y), (local_x, local_y));
+                            // self.chunk_grid[(chunk_x, chunk_y)].particle_grid[(local_x, local_y)]
+                            //     .refresh();
+                            painter.update_image_with_particle(
+                                global_x,
+                                global_y,
+                                self.width,
+                                self.chunk_grid[(chunk_x, chunk_y)].particle_grid
+                                    [(local_x, local_y)]
+                                    .color,
+                            );
+                        }
                     }
                 }
-                // }
             }
         }
 
-        // for y in 0..self.height {
-        //     for x in 0..self.width {
-        //         self.get_particle_mut((x, y)).refresh();
-        //         painter.update_image_with_particle(
-        //             x,
-        //             y,
-        //             self.width,
-        //             self.get_particle((x, y)).color,
-        //         );
-        //     }
-        // }
-        // dbg!(&painter.screen_buffer);
-        // painter.screen_texture.update(&painter.screen_image);
         painter.draw_screen(self.width, self.height);
 
         if debug_chunks {
             for chunk_x in 0..num_chunks_x {
                 for chunk_y in 0..num_chunks_y {
-                    if self.chunk_grid[(chunk_x, chunk_y)].update_this_frame {
+                    if self.chunk_grid[(chunk_x, chunk_y)].update_next_frame {
                         let (global_x, global_y) =
                             self.chunk_xy_to_global_xy((chunk_x, chunk_y), (0, 0));
                         painter.debug_chunk(
@@ -479,9 +471,9 @@ impl World {
     }
 
     // TODO: Consider pre-calculating this and storing it as a vector
-    fn index_to_xy(&self, i: usize) -> (usize, usize) {
-        (i % self.width, i / self.width)
-    }
+    // fn index_to_xy(&self, i: usize) -> (usize, usize) {
+    //     (i % self.width, i / self.width)
+    // }
 
     fn local_index_to_xy(&self, i: usize) -> (usize, usize) {
         (i % self.chunk_size, i / self.chunk_size)
@@ -510,33 +502,31 @@ impl World {
     fn get_particle(&self, xy: (usize, usize)) -> &Particle {
         let (chunk_xy, local_xy) = self.global_xy_to_chunk_xy(xy);
         &self.chunk_grid[chunk_xy].particle_grid[local_xy]
-        // &self.particle_grid[xy]
     }
 
     fn get_particle_mut(&mut self, xy: (usize, usize)) -> &mut Particle {
         let (chunk_xy, local_xy) = self.global_xy_to_chunk_xy(xy);
-        // self.chunk_grid[chunk_xy].update_next_frame = true;
-
-        self.wake_chunk_from(chunk_xy, local_xy);
+        self.wake_chunk_from_local(chunk_xy, local_xy);
         &mut self.chunk_grid[chunk_xy].particle_grid[local_xy]
-        // &mut self.particle_grid[xy]
     }
 
     fn put_particle(&mut self, xy: (usize, usize), particle: Particle) {
         let (chunk_xy, local_xy) = self.global_xy_to_chunk_xy(xy);
         if self.chunk_grid[chunk_xy].particle_grid[local_xy] != particle {
-            // self.chunk_grid[chunk_xy].update_next_frame = true;
-            self.wake_chunk_from(chunk_xy, local_xy);
+            self.wake_chunk_from_local(chunk_xy, local_xy);
             self.chunk_grid[chunk_xy].particle_grid[local_xy] = particle;
         }
-        // self.particle_grid[xy] = particle;
     }
 
-    fn wake_chunk_from(&mut self, chunk_xy: (usize, usize), local_xy: (usize, usize)) {
+    fn wake_chunk_from_local(&mut self, chunk_xy: (usize, usize), local_xy: (usize, usize)) {
+        // Wake up this chunk.
         self.chunk_grid[chunk_xy].update_next_frame = true;
 
         let (chunk_x, chunk_y) = chunk_xy;
         let (local_x, local_y) = local_xy;
+
+        // Wake up neighbouring chunk if we're within 2 spaces of it (and not on
+        // the edge)
         if local_x <= 1 && chunk_x != 0 {
             self.chunk_grid[(chunk_x - 1, chunk_y)].update_next_frame = true;
         } else if local_x >= self.chunk_size - 2 && chunk_x != (self.width / self.chunk_size) - 1 {
@@ -549,10 +539,6 @@ impl World {
             self.chunk_grid[(chunk_x, chunk_y + 1)].update_next_frame = true;
         }
     }
-
-    // fn put_particle_and_set_updated(&mut self, xy: (usize, usize), particle: Particle) {
-
-    // }
 
     fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
         self.get_particle(self.relative_xy(xy, dxdy))
