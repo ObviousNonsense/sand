@@ -17,7 +17,7 @@ pub struct ParticleTypeProperties {
     pub base_durability: Option<i16>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ParticleType {
     Border = 0,
@@ -184,7 +184,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: true,
-        dispersion_rate: Some(10),
+        dispersion_rate: Some(3),
         flammability: 0.9,
         wet_flammability: None,
         base_fuel: Some(25),
@@ -246,7 +246,7 @@ impl Deleted {
 }
 
 // #[derive(Debug)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Particle {
     pub particle_type: ParticleType,
     pub updated: bool,
@@ -371,7 +371,7 @@ impl Particle {
         }
 
         if deleted == Deleted::False {
-            self.updated = true;
+            // self.updated = true;
             api.update_in_world(self.to_owned());
         }
     }
@@ -482,9 +482,13 @@ impl Particle {
         ];
 
         let dxdy = dxdy_list[api.random_range(0..dxdy_list.len())];
-        let neighbour = api.neighbour_mut(dxdy);
+        let mut neighbour_clone = api.neighbour(dxdy).clone();
         if self.watered.unwrap() {
-            if neighbour.particle_type == ParticleType::Empty {
+            // This doesn't handle the edge case where every fungus particle is
+            // watered and has no where to grow
+            api.might_update();
+
+            if neighbour_clone.particle_type == ParticleType::Empty {
                 let mut count = 0;
                 for (ddx, ddy) in dxdy_list {
                     let dxdy2 = (dxdy.0 + ddx, dxdy.1 + ddy);
@@ -498,12 +502,14 @@ impl Particle {
                     api.replace_with_new(dxdy, ParticleType::Fungus);
                     self.set_watered(false);
                 }
-            } else if neighbour.particle_type == ParticleType::Fungus && !neighbour.watered.unwrap()
+            } else if neighbour_clone.particle_type == ParticleType::Fungus
+                && !neighbour_clone.watered.unwrap()
             {
-                neighbour.set_watered(true);
+                neighbour_clone.set_watered(true);
+                api.replace_with(dxdy, neighbour_clone);
                 self.set_watered(false);
             }
-        } else if neighbour.particle_type == ParticleType::Water {
+        } else if neighbour_clone.particle_type == ParticleType::Water {
             api.replace_with_new(dxdy, ParticleType::Empty);
             self.set_watered(true);
         }
@@ -698,7 +704,7 @@ impl Particle {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PColor {
     pub r: u8,
     pub g: u8,

@@ -39,8 +39,9 @@ async fn main() {
     .into_iter()
     .cycle();
 
-    let world_height = 200;
-    let world_width = 200;
+    let chunk_size = 16;
+    let world_height = 16 * chunk_size;
+    let world_width = 16 * chunk_size;
     let pixels_per_particle = 4;
 
     let painter = Painter::new(
@@ -61,7 +62,7 @@ async fn main() {
         last_placement_type: ParticleType::Sand,
         delete: false,
         replace: false,
-        debug_mode: false,
+        debug_mode: true,
         portal_direction: Direction::Down,
         last_portal_placed: vec![],
         waiting_for_partner_portal: false,
@@ -74,6 +75,7 @@ async fn main() {
         painter,
         drawing_style: DrawingStyle::Brush,
         draw_xy1: None,
+        chunk_size,
     };
 
     // println!("{:#?}", settings);
@@ -89,19 +91,18 @@ async fn main() {
         let time = get_time();
         let frame_time = time - tic;
         egui_macroquad::ui(|ctx| setup_ui(ctx, &mut settings, &mut world, fps));
+        keys_input(&mut settings, &mut world);
 
         if settings.painter.pixels_per_particle != settings.new_pixels_per_particle {
             settings.rescale();
         }
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
-        // clear_background(BLACK);
-        world.draw_and_reset_all_particles(&mut settings.painter);
+        clear_background(BLACK);
+        world.draw_and_refresh(&mut settings.painter, settings.debug_mode);
         // ─────────────────────────────────────────────────────────────────────────
 
-        // ─── Input ───────────────────────────────────────────────────────────────
-        handle_input(&mut settings, &mut world);
-        // ─────────────────────────────────────────────────────────────────────────
+        cursor_input(&mut settings, &mut world);
 
         if !LIMIT_UPDATE_RATE || frame_time >= MINIMUM_UPDATE_TIME {
             // ─── Limiting And Printing Fps ───────────────────────────────
@@ -151,10 +152,11 @@ struct Settings {
     last_portal_placed: Vec<(usize, usize)>,
     waiting_for_partner_portal: bool,
     portal_color: PColor,
+    portal_placement_valid: bool,
     draw_xy1: Option<(usize, usize)>,
     new_size: (usize, usize),
-    portal_placement_valid: bool,
     new_pixels_per_particle: f32,
+    chunk_size: usize,
     mouse_over_gui: bool,
     painter: Painter,
     portal_color_cycle: Cycle<std::vec::IntoIter<PColor>>,
@@ -176,7 +178,7 @@ impl Settings {
         self.last_portal_placed = vec![];
         self.waiting_for_partner_portal = false;
 
-        World::new(self.new_size.0, self.new_size.1)
+        World::new(self.new_size.0, self.new_size.1, self.chunk_size)
     }
 
     fn rescale(&mut self) {
@@ -319,6 +321,15 @@ impl Painter {
         )
     }
 
+    fn debug_chunk(&self, x: usize, y: usize, width: usize, height: usize, text: &str) {
+        let (px, py) = self.xy_to_pixels(x, y);
+        let (mut pw, mut ph) = self.xy_to_pixels(width, height);
+        pw -= self.world_px0;
+        ph -= self.world_py0;
+        draw_rectangle_lines(px, py, pw, ph, 1.0, RED);
+        draw_text(text, px, py + ph / 2.0, 16.0, WHITE);
+    }
+
     fn draw_source(&self, x: usize, y: usize, color: Color, replaces: bool, sink: bool) {
         let (px, py) = self.xy_to_pixels(x, y);
         draw_rectangle(
@@ -363,7 +374,7 @@ impl Painter {
 }
 
 // ─── Handle Input ──────────────────────────────────────────────────────────────────────────── ✣ ─
-fn handle_input(settings: &mut Settings, world: &mut World) {
+fn cursor_input(settings: &mut Settings, world: &mut World) {
     let (px, py) = mouse_position();
 
     if px > settings.painter.world_px0
@@ -496,10 +507,13 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
             }
         }
     }
+}
 
+fn keys_input(settings: &mut Settings, world: &mut World) {
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
-        world.draw_and_reset_all_particles(&mut settings.painter);
+        println!("advance");
+        world.draw_and_refresh(&mut settings.painter, settings.debug_mode);
         world.update_all();
     }
     // Pause/Unpause with space
@@ -842,13 +856,17 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     .num_columns(2)
                     .striped(true)
                     .show(ui, |ui| {
+                        let chunk_size = settings.chunk_size;
                         // ui.group(|ui| {
                         // ui.horizontal(|ui| {
                         ui.label("New X: ");
                         ui.add(
-                            egui::Slider::new(&mut settings.new_size.0, 10..=1000)
-                                .fixed_decimals(0)
-                                .step_by(10.0),
+                            egui::Slider::new(
+                                &mut settings.new_size.0,
+                                chunk_size..=60 * chunk_size,
+                            )
+                            .fixed_decimals(0)
+                            .step_by(chunk_size as f64),
                             // egui::DragValue::new(&mut settings.new_size.0)
                             //     .clamp_range(1..=1000)
                             //     .fixed_decimals(0)
@@ -859,9 +877,12 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         // ui.horizontal(|ui| {
                         ui.label("New Y: ");
                         ui.add(
-                            egui::Slider::new(&mut settings.new_size.1, 10..=1000)
-                                .fixed_decimals(0)
-                                .step_by(10.0),
+                            egui::Slider::new(
+                                &mut settings.new_size.1,
+                                chunk_size..=60 * chunk_size,
+                            )
+                            .fixed_decimals(0)
+                            .step_by(chunk_size as f64),
                             // egui::DragValue::new(&mut settings.new_size.1)
                             //     .clamp_range(1..=1000)
                             //     .fixed_decimals(0)

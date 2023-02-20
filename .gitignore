@@ -2,3 +2,4 @@
 /.vscode
 /.vs
 .DS_Store
+*.log
