@@ -499,7 +499,7 @@ impl World {
         )
     }
 
-    fn get_particle(&self, xy: (usize, usize)) -> &Particle {
+    pub fn get_particle(&self, xy: (usize, usize)) -> &Particle {
         let (chunk_xy, local_xy) = self.global_xy_to_chunk_xy(xy);
         &self.chunk_grid[chunk_xy].particle_grid[local_xy]
     }

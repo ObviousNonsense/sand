@@ -174,8 +174,8 @@ struct Settings {
 impl Settings {
     fn resize_world_and_screen(&mut self) -> World {
         self.painter = Painter::new(
-            self.painter.world_px0,
-            self.painter.world_py0,
+            self.painter.world_pxmin,
+            self.painter.world_pymin,
             self.new_pixels_per_particle,
             self.new_size.0,
             self.new_size.1,
@@ -200,15 +200,19 @@ impl Settings {
         // display is wrong on windows when the 4k monitor with 150% scaling is the
         // primary monitor
         request_new_screen_size(
-            self.painter.world_px0 + self.new_size.0 as f32 * self.painter.pixels_per_particle,
-            self.painter.world_py0 + self.new_size.1 as f32 * self.painter.pixels_per_particle,
+            300.0
+                + self.painter.world_pxmin
+                + self.new_size.0 as f32 * self.painter.pixels_per_particle,
+            self.painter.world_pymin + self.new_size.1 as f32 * self.painter.pixels_per_particle,
         );
     }
 }
 
 pub struct Painter {
-    world_px0: f32,
-    world_py0: f32,
+    world_pxmin: f32,
+    world_pxmax: f32,
+    world_pymin: f32,
+    world_pymax: f32,
     pixels_per_particle: f32,
     screen_buffer: Vec<u8>,
     screen_texture: Texture2D,
@@ -217,8 +221,10 @@ pub struct Painter {
 impl core::fmt::Debug for Painter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Painter")
-            .field("world_px0", &self.world_px0)
-            .field("world_py0", &self.world_py0)
+            .field("world_pxmin", &self.world_pxmin)
+            .field("world_pxmax", &self.world_pxmax)
+            .field("world_pymin", &self.world_pymin)
+            .field("world_pymax", &self.world_pymax)
             .field("pixels_per_particle", &self.pixels_per_particle)
             .finish_non_exhaustive()
     }
@@ -226,8 +232,8 @@ impl core::fmt::Debug for Painter {
 
 impl Painter {
     fn new(
-        world_px0: f32,
-        world_py0: f32,
+        world_pxmin: f32,
+        world_pymin: f32,
         pixels_per_particle: f32,
         world_width: usize,
         world_height: usize,
@@ -241,8 +247,10 @@ impl Painter {
         screen_texture.set_filter(FilterMode::Nearest);
 
         Self {
-            world_px0,
-            world_py0,
+            world_pxmin,
+            world_pxmax: world_pxmin + pixels_per_particle * world_width as f32,
+            world_pymin,
+            world_pymax: world_pymin + pixels_per_particle * world_height as f32,
             pixels_per_particle,
             screen_buffer,
             screen_texture,
@@ -251,15 +259,15 @@ impl Painter {
 
     fn pixels_to_xy<T: From<f32>>(&self, px: f32, py: f32) -> (T, T) {
         (
-            ((px - self.world_px0) / self.pixels_per_particle).into(),
-            ((py - self.world_py0) / self.pixels_per_particle).into(),
+            ((px - self.world_pxmin) / self.pixels_per_particle).into(),
+            ((py - self.world_pymin) / self.pixels_per_particle).into(),
         )
     }
 
     fn xy_to_pixels(&self, x: usize, y: usize) -> (f32, f32) {
         (
-            x as f32 * self.pixels_per_particle + self.world_px0,
-            y as f32 * self.pixels_per_particle + self.world_py0,
+            x as f32 * self.pixels_per_particle + self.world_pxmin,
+            y as f32 * self.pixels_per_particle + self.world_pymin,
         )
     }
 
@@ -323,8 +331,8 @@ impl Painter {
 
         draw_texture_ex(
             self.screen_texture,
-            self.world_px0,
-            self.world_py0,
+            self.world_pxmin,
+            self.world_pymin,
             WHITE,
             DrawTextureParams {
                 dest_size: Some(Vec2::new(
@@ -345,8 +353,8 @@ impl Painter {
     fn debug_chunk(&self, x: usize, y: usize, width: usize, height: usize, text: &str) {
         let (px, py) = self.xy_to_pixels(x, y);
         let (mut pw, mut ph) = self.xy_to_pixels(width, height);
-        pw -= self.world_px0;
-        ph -= self.world_py0;
+        pw -= self.world_pxmin;
+        ph -= self.world_pymin;
         draw_rectangle_lines(px, py, pw, ph, 1.0, RED);
         draw_text(text, px, py + ph / 2.0, 16.0, WHITE);
     }
@@ -398,9 +406,9 @@ impl Painter {
 fn cursor_input(settings: &mut Settings, world: &mut World) {
     let (px, py) = mouse_position();
 
-    if px > settings.painter.world_px0
+    if px > settings.painter.world_pxmin
         && px < screen_width()
-        && py > settings.painter.world_py0
+        && py > settings.painter.world_pymin
         && py < screen_height()
         && !settings.mouse_over_gui
     {
@@ -782,12 +790,12 @@ fn create_placeable(settings: &mut Settings, world: &mut World, xy: (usize, usiz
     }
 }
 
-// fn debug_particle_string(world: &World, painter: &Painter) -> String {
-//     // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
-//     let (x, y) = painter.mouse_location(world.width(), world.height());
-//     let p = world.particle_at((x, y));
-//     format!("({}, {}): {:#?}", x, y, p)
-// }
+fn debug_particle_string(world: &World, painter: &Painter) -> String {
+    // let (x, _, y, _) = calculate_brush(1.0, world.width, world.height);
+    let (x, y) = painter.mouse_location(world.width(), world.height());
+    let p = world.get_particle((x, y));
+    format!("({}, {}): {:#?}", x, y, p)
+}
 
 #[derive(Debug, PartialEq)]
 enum DrawingStyle {
@@ -836,8 +844,8 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
         // .resizable(false)
         .title_bar(false)
         .fixed_size([
-            settings.painter.world_px0 - 13.0,
-            settings.painter.world_py0,
+            settings.painter.world_pxmin - 13.0,
+            settings.painter.world_pymin,
         ])
         .anchor(egui::Align2::LEFT_TOP, [0., 0.])
         .show(ctx, |ui| {
@@ -1087,19 +1095,23 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                 ui.end_row();
             });
         });
-    if settings.debug_mode {
-        egui::Window::new("settings")
-            .default_pos([
-                settings.painter.world_px0 - 100.0,
-                settings.painter.world_py0,
-            ])
-            .show(ctx, |ui| {
+    // if settings.debug_mode {
+    egui::Window::new("Debug Info")
+        .fixed_pos([settings.painter.world_pxmax, settings.painter.world_pymin])
+        .resizable(false)
+        .show(ctx, |ui| {
+            egui::CollapsingHeader::new("Settings Struct").show(ui, |ui| {
                 ui.label(format!("{:#?}", settings));
             });
-        // ui.group(|ui| {
-        //     // ui.label(debug_particle_string(world, &settings.painter));
-        // });
-    }
+            egui::CollapsingHeader::new("Particle Under Mouse").show(ui, |ui| {
+                // let (mousex, mousey) = settings.painter.mouse_location(grid_width, grid_height)
+                ui.label(debug_particle_string(world, &settings.painter));
+            });
+        });
+    // ui.group(|ui| {
+    //     // ui.label(debug_particle_string(world, &settings.painter));
+    // });
+    // }
 }
 
 fn particle_selector(ui: &mut egui::Ui, ptype: ParticleType, settings: &mut Settings) {
