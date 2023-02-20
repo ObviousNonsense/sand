@@ -511,6 +511,7 @@ fn handle_input(settings: &mut Settings, world: &mut World) {
 
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
+        println!("advance");
         world.draw_and_refresh(&mut settings.painter, settings.debug_mode);
         world.update_all();
     }

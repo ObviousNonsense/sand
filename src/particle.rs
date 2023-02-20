@@ -482,7 +482,7 @@ impl Particle {
         ];
 
         let dxdy = dxdy_list[api.random_range(0..dxdy_list.len())];
-        let neighbour = api.neighbour_mut(dxdy);
+        let neighbour = api.neighbour(dxdy);
         if self.watered.unwrap() {
             if neighbour.particle_type == ParticleType::Empty {
                 let mut count = 0;
@@ -500,7 +500,9 @@ impl Particle {
                 }
             } else if neighbour.particle_type == ParticleType::Fungus && !neighbour.watered.unwrap()
             {
+                let mut neighbour = neighbour.clone();
                 neighbour.set_watered(true);
+                api.replace_with(dxdy, neighbour);
                 self.set_watered(false);
             }
         } else if neighbour.particle_type == ParticleType::Water {
