@@ -46,8 +46,8 @@ async fn main() {
     .cycle();
 
     let chunk_size = 16;
-    let world_height = 16 * chunk_size;
-    let world_width = 16 * chunk_size;
+    let world_height = 12 * chunk_size;
+    let world_width = 12 * chunk_size;
     let pixels_per_particle = 4;
 
     let painter = Painter::new(
@@ -68,7 +68,7 @@ async fn main() {
         last_placement_type: ParticleType::Sand,
         delete: false,
         replace: false,
-        debug_mode: true,
+        debug_mode: false,
         portal_direction: Direction::Down,
         last_portal_placed: vec![],
         waiting_for_partner_portal: false,
