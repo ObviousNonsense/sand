@@ -122,6 +122,11 @@ impl<'a> WorldApi<'a> {
     pub fn xy(&self) -> &(usize, usize) {
         &self.xy
     }
+
+    pub fn might_update(&mut self) {
+        let (chunk_xy, local_xy) = self.world.global_xy_to_chunk_xy(self.xy);
+        self.world.wake_chunk_from(chunk_xy, local_xy);
+    }
 }
 
 #[derive(Clone)]
@@ -224,6 +229,7 @@ impl World {
     // ─── Update Methods ──────────────────────────────────────────────────────────────────
     pub fn update_all(&mut self) {
         self.update_all_sources();
+        self.shift_chunks_update_flag();
         self.update_all_particles();
     }
 
@@ -236,6 +242,17 @@ impl World {
                         self.add_new_particle(source.particle_type, xy, source.replaces);
                     }
                 }
+            }
+        }
+    }
+
+    fn shift_chunks_update_flag(&mut self) {
+        let num_chunks_x = self.chunk_grid.row_len();
+        let num_chunks_y = self.chunk_grid.column_len();
+
+        for chunk_x in 0..num_chunks_x {
+            for chunk_y in 0..num_chunks_y {
+                self.chunk_grid[(chunk_x, chunk_y)].shift_update_flag();
             }
         }
     }
@@ -272,8 +289,6 @@ impl World {
 
         for chunk_x in chunk_x_range.iter() {
             for chunk_y in chunk_y_range.iter() {
-                self.chunk_grid[(*chunk_x, *chunk_y)].shift_update_flag();
-
                 if self.chunk_grid[(*chunk_x, *chunk_y)].update_this_frame {
                     for idx in idx_range.iter() {
                         let local_xy = self.local_index_to_xy(*idx);
