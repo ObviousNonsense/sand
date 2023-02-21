@@ -324,11 +324,9 @@ impl Particle {
     pub fn update(&mut self, mut api: WorldApi) {
         let mut deleted = Deleted::False;
         let false_premove =
-            |_self: &mut Self, _dxdy: (isize, isize), _api: &mut WorldApi| Deleted::False;
+            |_self: &mut Self, _dxdy: (i16, i16), _api: &mut WorldApi| Deleted::False;
 
-        if self.particle_type.properties().moves && self.particle_type.properties().auto_move
-        // && self.particle_type != ParticleType::Water
-        {
+        if self.particle_type.properties().moves && self.particle_type.properties().auto_move {
             deleted.update(self.movement(&mut api, false_premove));
         }
 
@@ -349,7 +347,7 @@ impl Particle {
             }
             ParticleType::Acid => deleted.update(self.movement(
                 &mut api,
-                |particle: &mut Self, dxdy: (isize, isize), api: &mut WorldApi| {
+                |particle: &mut Self, dxdy: (i16, i16), api: &mut WorldApi| {
                     particle.try_decaying(dxdy, api)
                 },
             )),
@@ -532,7 +530,7 @@ impl Particle {
 
     fn movement<F>(&mut self, api: &mut WorldApi, premove_function: F) -> Deleted
     where
-        F: Fn(&mut Self, (isize, isize), &mut WorldApi) -> Deleted,
+        F: Fn(&mut Self, (i16, i16), &mut WorldApi) -> Deleted,
     {
         if self.moved.unwrap() {
             return Deleted::False;
@@ -567,7 +565,7 @@ impl Particle {
         } else {
             // self.sand_movement(api);
             let r = api.random::<bool>();
-            let right: isize = if r { -1 } else { 1 };
+            let right: i16 = if r { -1 } else { 1 };
             check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
             // TODO: Should maybe find a way to use deleted.update here
             (deleted, _) = self.movement_loop(api, check_directions, premove_function);
@@ -578,14 +576,14 @@ impl Particle {
     fn movement_loop<F>(
         &mut self,
         api: &mut WorldApi,
-        check_directions: Vec<(isize, isize)>,
+        check_directions: Vec<(i16, i16)>,
         premove_function: F,
-    ) -> (Deleted, Option<(isize, isize)>)
+    ) -> (Deleted, Option<(i16, i16)>)
     where
-        F: Fn(&mut Self, (isize, isize), &mut WorldApi) -> Deleted,
+        F: Fn(&mut Self, (i16, i16), &mut WorldApi) -> Deleted,
     {
         //
-        let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(1) as isize;
+        let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(1) as i16;
         for dxdy in check_directions.into_iter() {
             //
 
@@ -615,7 +613,7 @@ impl Particle {
         (Deleted::False, None)
     }
 
-    fn disperse(&mut self, dxdy: (isize, isize), api: &mut WorldApi) {
+    fn disperse(&mut self, dxdy: (i16, i16), api: &mut WorldApi) {
         iterate_over_line_delta(dxdy, |dx, dy| {
             let other_type = self.try_moving_to((dx, dy), api);
             if let Some(other_type) = other_type {
@@ -635,7 +633,7 @@ impl Particle {
         })
     }
 
-    fn try_decaying(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> Deleted {
+    fn try_decaying(&mut self, dxdy: (i16, i16), api: &mut WorldApi) -> Deleted {
         let other_p = api.neighbour_mut(dxdy);
         if other_p.particle_type != self.particle_type {
             if let Some(other_durability) = other_p.durability.as_mut() {
@@ -657,7 +655,7 @@ impl Particle {
 
     /// Checks if this particle can and will move in the given direction.
     /// Assumes that if it can move there it will (sets self.moved to true)
-    fn try_moving_to(&mut self, dxdy: (isize, isize), api: &mut WorldApi) -> Option<ParticleType> {
+    fn try_moving_to(&mut self, dxdy: (i16, i16), api: &mut WorldApi) -> Option<ParticleType> {
         // let rand_factor = api.random::<f32>();
         let other_p = api.neighbour(dxdy);
         let other_weight = api.neighbour(dxdy).particle_type.properties().weight;
