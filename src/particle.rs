@@ -359,7 +359,6 @@ impl Particle {
         }
 
         if deleted == Deleted::False {
-            // self.updated = true;
             api.update_in_world(self.to_owned());
         }
     }
@@ -370,14 +369,6 @@ impl Particle {
             self.moved = Some(false);
         }
     }
-
-    // pub fn set_moved(&mut self, val: bool) {
-    //     if self.particle_type.properties().moves {
-    //         self.moved = Some(val);
-    //     } else {
-    //         unreachable!("Called set_moved on non-movable particle {:?}", self);
-    //     }
-    // }
 }
 
 impl Particle {

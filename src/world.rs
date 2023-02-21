@@ -260,24 +260,6 @@ impl World {
     }
 
     fn update_all_particles(&mut self) {
-        // TODO: Consider pre-generating this and storing it (either pass it
-        // into the function or store it in the struct and clone it here)
-        // let mut idx_range: Vec<usize> =
-        //     ((self.width + 1)..(self.width * self.height - 2)).collect();
-        // idx_range.shuffle(&mut self.rng);
-        // for idx in idx_range.into_iter() {
-        //     // let idx = *idx;
-        //     let xy = self.index_to_xy(idx);
-
-        //     let mut particle_clone = self.get_particle(xy).clone();
-
-        //     if particle_clone.particle_type == ParticleType::Empty || particle_clone.updated {
-        //         continue;
-        //     }
-
-        //     particle_clone.update(WorldApi { world: self, xy });
-        // }
-
         let num_chunks_x = self.width / self.chunk_size;
         let num_chunks_y = self.height / self.chunk_size;
 
@@ -296,8 +278,6 @@ impl World {
                         let local_xy = self.local_index_to_xy(*idx);
 
                         // Clone the particle and make sure it hasn't been updated
-                        // let mut particle_clone =
-                        //     self.chunk_grid[(*chunk_x, *chunk_y)].particle_grid[(local_xy)].clone();
 
                         let particle =
                             &self.chunk_grid[(*chunk_x, *chunk_y)].particle_grid[(local_xy)];
@@ -469,11 +449,6 @@ impl World {
             }
         }
     }
-
-    // TODO: Consider pre-calculating this and storing it as a vector
-    // fn index_to_xy(&self, i: usize) -> (usize, usize) {
-    //     (i % self.width, i / self.width)
-    // }
 
     fn local_index_to_xy(&self, i: usize) -> (usize, usize) {
         (i % self.chunk_size, i / self.chunk_size)

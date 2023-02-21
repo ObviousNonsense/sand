@@ -342,12 +342,6 @@ impl Painter {
                 ..Default::default()
             },
         );
-        // build_textures_atlas();
-        // tex.delete();
-        // unsafe {
-        //     // macroquad::window::get_internal_gl().flush();
-        //     miniquad::native::gl::glFlush();
-        // };
     }
 
     fn debug_chunk(&self, x: usize, y: usize, width: usize, height: usize, text: &str) {
@@ -767,11 +761,6 @@ fn create_placeable(settings: &mut Settings, world: &mut World, xy: (usize, usiz
                 if settings.last_portal_placed.len() == settings.brush_size as usize {
                     settings.waiting_for_partner_portal = true;
                 }
-                // let last_portal_placed = match settings.last_portal_placed {
-                //     Some(_) => None,
-                //     None => Some(xy),
-                // };
-                // settings.last_portal_placed = last_portal_placed;
 
                 if settings.debug_mode {
                     println!(
@@ -1039,14 +1028,6 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         settings.placement_type = settings.last_placement_type;
                     }
 
-                    // ui.visuals_mut().selection = egui::style::Selection {
-                    //     bg_fill: egui::Color32::from_white_alpha(100),
-                    //     stroke: egui::Stroke {
-                    //         width: 10.0,
-                    //         color: egui::Color32::RED,
-                    //     },
-                    // };
-
                     particle_selector(ui, ParticleType::Sand, settings);
                     particle_selector(ui, ParticleType::Water, settings);
                     particle_selector(ui, ParticleType::Concrete, settings);
@@ -1099,7 +1080,6 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
             ui.add(egui::Hyperlink::new(
                 "https://github.com/ObviousNonsense/sand",
             ));
-            // ui.label(debug_particle_string(world, &settings.painter));
         });
     // if settings.debug_mode {
     egui::Window::new("Debug Info")
@@ -1110,7 +1090,6 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                 ui.label(format!("{:#?}", settings));
             });
             egui::CollapsingHeader::new("Particle Under Mouse").show(ui, |ui| {
-                // let (mousex, mousey) = settings.painter.mouse_location(grid_width, grid_height)
                 ui.label(debug_particle_string(world, &settings.painter));
             });
         });
