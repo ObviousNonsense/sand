@@ -1093,12 +1093,12 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                 );
                 ui.label("");
                 ui.end_row();
-                ui.separator();
-                ui.separator();
-                ui.add(egui::Hyperlink::new(
-                    "https://github.com/ObviousNonsense/sand",
-                ));
             });
+            ui.separator();
+            ui.separator();
+            ui.add(egui::Hyperlink::new(
+                "https://github.com/ObviousNonsense/sand",
+            ));
         });
     // if settings.debug_mode {
     egui::Window::new("Debug Info")
