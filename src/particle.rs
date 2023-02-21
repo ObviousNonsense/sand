@@ -258,7 +258,6 @@ pub struct Particle {
     condensation_countdown: Option<i16>,
     initial_condensation_countdown: Option<i16>,
     watered: Option<bool>,
-    fresh: Option<bool>,
     fuel: Option<i16>,
     durability: Option<i16>,
 }
@@ -290,11 +289,7 @@ impl Particle {
             None
         };
 
-        let (burning, fresh) = if particle_type == ParticleType::Flame {
-            (true, Some(true))
-        } else {
-            (false, None)
-        };
+        let burning = particle_type == ParticleType::Flame;
 
         let fuel = particle_type.properties().base_fuel;
         let durability = particle_type.properties().base_durability;
@@ -321,7 +316,6 @@ impl Particle {
             condensation_countdown,
             initial_condensation_countdown: condensation_countdown,
             watered,
-            fresh,
             fuel,
             durability,
         }
@@ -348,10 +342,6 @@ impl Particle {
                 self.grow_fungus(&mut api);
             }
             ParticleType::Flame => {
-                if self.fresh.unwrap() {
-                    self.fresh = Some(false);
-                };
-
                 if !self.burning {
                     deleted = Deleted::True;
                     api.replace_with_new((0, 0), ParticleType::Empty);
