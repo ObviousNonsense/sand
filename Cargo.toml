@@ -21,4 +21,4 @@ debug = 1
 opt-level = 3
 
 [profile.dev]
-debug = 3
+debug = 2

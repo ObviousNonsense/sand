@@ -652,11 +652,7 @@ impl Particle {
     fn fall_with_gravity(&mut self, dxdy: (i16, i16), api: &mut WorldApi) {
         iterate_over_line_delta(dxdy, |dx, dy| {
             self.try_moving_to((dx, dy), api);
-            if self.moved.unwrap() {
-                true
-            } else {
-                false
-            }
+            self.moved.unwrap()
         })
     }
 
