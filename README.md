@@ -3,7 +3,7 @@
 Port/new version of a falling sand sim [I first started working on in
 Javascript](https://github.com/ObviousNonsense/FallingSand), now written in Rust.
 
-[You can play with the web version here](ObviousNonsense.github.io/sand/)
+[You can play with the web version here](https://obviousnonsense.github.io/sand/)
 
 Or clone the repo and build it yourself, assuming you have installed cargo (through rustup), just run:
 
