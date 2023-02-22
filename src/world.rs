@@ -591,8 +591,8 @@ where
 
         let current_x = x_increase * x_modifier;
         let current_y = y_increase * y_modifier;
-        let delta_x = current_x - prev_x;
-        let delta_y = current_y - prev_y;
+        let delta_x = prev_x - current_x;
+        let delta_y = prev_y - current_y;
         if !inner_function(current_x, current_y, delta_x, delta_y) {
             break;
         };

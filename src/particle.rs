@@ -10,6 +10,7 @@ pub struct ParticleTypeProperties {
     pub moves: bool,
     pub auto_move: bool,
     pub fluid: bool,
+    pub terminal_velocity_sq: Option<i32>,
     pub dispersion_rate: Option<u8>,
     pub flammability: f32,
     pub wet_flammability: Option<f32>,
@@ -44,6 +45,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: false,
         auto_move: false,
         fluid: false,
+        terminal_velocity_sq: None,
         dispersion_rate: None,
         flammability: 0.0,
         wet_flammability: None,
@@ -58,6 +60,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: false,
         auto_move: false,
         fluid: false,
+        terminal_velocity_sq: None,
         dispersion_rate: None,
         flammability: 0.0,
         wet_flammability: None,
@@ -72,6 +75,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: false,
         auto_move: false,
         fluid: false,
+        terminal_velocity_sq: None,
         dispersion_rate: None,
         flammability: 0.0,
         wet_flammability: None,
@@ -86,6 +90,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: false,
+        terminal_velocity_sq: Some(i32::pow(5, 2)),
         dispersion_rate: None,
         flammability: 0.0,
         wet_flammability: None,
@@ -100,6 +105,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: true,
+        terminal_velocity_sq: Some(i32::pow(5, 2)),
         dispersion_rate: Some(5),
         flammability: 0.0,
         wet_flammability: None,
@@ -114,6 +120,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: false,
         fluid: true,
+        terminal_velocity_sq: Some(i32::pow(5, 2)),
         dispersion_rate: Some(10),
         flammability: 0.0,
         wet_flammability: None,
@@ -128,6 +135,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: false,
         auto_move: false,
         fluid: false,
+        terminal_velocity_sq: None,
         dispersion_rate: None,
         flammability: 0.125,
         wet_flammability: Some(0.015),
@@ -142,6 +150,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: false,
         auto_move: false,
         fluid: false,
+        terminal_velocity_sq: None,
         dispersion_rate: None,
         flammability: 0.0,
         wet_flammability: None,
@@ -156,6 +165,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: true,
+        terminal_velocity_sq: Some(i32::pow(5, 2)),
         dispersion_rate: Some(7),
         flammability: 0.95,
         wet_flammability: None,
@@ -170,6 +180,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: false,
+        terminal_velocity_sq: Some(i32::pow(5, 2)),
         dispersion_rate: None,
         flammability: 0.6,
         wet_flammability: None,
@@ -184,6 +195,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: true,
+        terminal_velocity_sq: Some(i32::pow(5, 2)),
         dispersion_rate: Some(3),
         flammability: 0.9,
         wet_flammability: None,
@@ -198,6 +210,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: false,
         auto_move: false,
         fluid: false,
+        terminal_velocity_sq: None,
         dispersion_rate: None,
         flammability: 0.1,
         wet_flammability: None,
@@ -212,6 +225,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: false,
         fluid: true,
+        terminal_velocity_sq: Some(i32::pow(5, 2)),
         dispersion_rate: Some(1),
         flammability: 0.0,
         wet_flammability: None,
@@ -254,6 +268,7 @@ pub struct Particle {
     original_color: PColor,
     burning: bool,
     moved: Option<bool>,
+    velocity: Option<IVec2>,
     moving_right: Option<bool>,
     condensation_countdown: Option<i16>,
     initial_condensation_countdown: Option<i16>,
@@ -265,10 +280,10 @@ pub struct Particle {
 // General Particle Methods
 impl Particle {
     pub fn new(particle_type: ParticleType, rng: &mut ThreadRng) -> Self {
-        let moved = if particle_type.properties().moves {
-            Some(false)
+        let (moved, velocity) = if particle_type.properties().moves {
+            (Some(false), Some(IVec2::ZERO))
         } else {
-            None
+            (None, None)
         };
 
         let moving_right = if particle_type.properties().fluid {
@@ -312,6 +327,7 @@ impl Particle {
             original_color: color,
             burning,
             moved,
+            velocity,
             moving_right,
             condensation_countdown,
             initial_condensation_countdown: condensation_countdown,
@@ -527,8 +543,26 @@ impl Particle {
             return Deleted::False;
         }
 
+        // println!("here");
         let check_directions;
         let deleted;
+
+        if !self.rises() {
+            if let Some(vel) = self.velocity.as_mut() {
+                let mag_v_sq = (vel.x).pow(2) + (vel.y).pow(2);
+                if mag_v_sq
+                    < self
+                        .particle_type
+                        .properties()
+                        .terminal_velocity_sq
+                        .unwrap()
+                {
+                    vel.y += 1;
+                }
+            }
+        }
+
+        let last_dxdy;
 
         if self.particle_type.properties().fluid {
             // self.fluid_movement(api);
@@ -539,7 +573,6 @@ impl Particle {
                 (vec![(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)], (1, 0))
             };
 
-            let last_dxdy;
             // TODO: Should maybe find a way to use deleted.update here
             (deleted, last_dxdy) = self.movement_loop(api, check_directions, premove_function);
 
@@ -559,8 +592,16 @@ impl Particle {
             let right: i16 = if r { -1 } else { 1 };
             check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
             // TODO: Should maybe find a way to use deleted.update here
-            (deleted, _) = self.movement_loop(api, check_directions, premove_function);
+            (deleted, last_dxdy) = self.movement_loop(api, check_directions, premove_function);
         }
+
+        let last_dxdy = last_dxdy.unwrap_or((1, 0));
+        if last_dxdy.0 != 0 {
+            if let Some(vel) = self.velocity.as_mut() {
+                vel.y = 0;
+            }
+        }
+
         deleted
     }
 
@@ -582,6 +623,8 @@ impl Particle {
 
             let dxdy_new = if dxdy.1 == 0 {
                 (dispersion_rate * dxdy.0, dxdy.1)
+            } else if r == 1 && dxdy.0 == 0 {
+                (dxdy.0, self.velocity.unwrap().y as i16)
             } else {
                 (dxdy.0, r * dxdy.1)
             };
@@ -593,6 +636,8 @@ impl Particle {
             } else {
                 if dxdy_new.0.abs() > 1 {
                     self.disperse(dxdy_new, api);
+                } else if dxdy_new.1 > 1 {
+                    self.fall_with_gravity(dxdy_new, api);
                 } else {
                     self.try_moving_to(dxdy_new, api);
                 }
@@ -602,6 +647,17 @@ impl Particle {
             }
         }
         (Deleted::False, None)
+    }
+
+    fn fall_with_gravity(&mut self, dxdy: (i16, i16), api: &mut WorldApi) {
+        iterate_over_line_delta(dxdy, |dx, dy| {
+            self.try_moving_to((dx, dy), api);
+            if self.moved.unwrap() {
+                true
+            } else {
+                false
+            }
+        })
     }
 
     fn disperse(&mut self, dxdy: (i16, i16), api: &mut WorldApi) {
