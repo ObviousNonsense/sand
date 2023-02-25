@@ -1,9 +1,11 @@
 use egui_macroquad::{egui, egui::RichText, *};
+use helpers::*;
 use macroquad::prelude::*;
 use particle::*;
 use std::iter::Cycle;
 use world::*;
 
+mod helpers;
 mod particle;
 mod world;
 
@@ -32,7 +34,7 @@ async fn main() {
     // let _profiler = dhat::Profiler::new_heap();
     // color_eyre::install()?;
 
-    let mut color_cycle: Cycle<std::vec::IntoIter<particle::PColor>> = vec![
+    let mut color_cycle: Cycle<std::vec::IntoIter<PColor>> = vec![
         RED.into(),
         LIME.into(),
         VIOLET.into(),
@@ -45,10 +47,10 @@ async fn main() {
     .into_iter()
     .cycle();
 
-    let chunk_size = 16;
-    let world_height = 4 * chunk_size;
-    let world_width = 4 * chunk_size;
-    let pixels_per_particle = 12;
+    let chunk_size = 24;
+    let world_height = 12 * chunk_size;
+    let world_width = 12 * chunk_size;
+    let pixels_per_particle = 4;
 
     let painter = Painter::new(
         300.0,

@@ -10,7 +10,7 @@ pub struct ParticleTypeProperties {
     pub moves: bool,
     pub auto_move: bool,
     pub fluid: bool,
-    pub terminal_velocity_sq: Option<i32>,
+    pub terminal_velocity_sq: Option<u16>,
     pub dispersion_rate: Option<u8>,
     pub flammability: f32,
     pub wet_flammability: Option<f32>,
@@ -90,7 +90,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: false,
-        terminal_velocity_sq: Some(i32::pow(5, 2)),
+        terminal_velocity_sq: Some(u16::pow(5, 2)),
         dispersion_rate: None,
         flammability: 0.0,
         wet_flammability: None,
@@ -105,7 +105,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: true,
-        terminal_velocity_sq: Some(i32::pow(5, 2)),
+        terminal_velocity_sq: Some(u16::pow(5, 2)),
         dispersion_rate: Some(5),
         flammability: 0.0,
         wet_flammability: None,
@@ -120,7 +120,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: false,
         fluid: true,
-        terminal_velocity_sq: Some(i32::pow(5, 2)),
+        terminal_velocity_sq: Some(u16::pow(5, 2)),
         dispersion_rate: Some(10),
         flammability: 0.0,
         wet_flammability: None,
@@ -165,7 +165,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: true,
-        terminal_velocity_sq: Some(i32::pow(5, 2)),
+        terminal_velocity_sq: Some(u16::pow(5, 2)),
         dispersion_rate: Some(7),
         flammability: 0.95,
         wet_flammability: None,
@@ -180,7 +180,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: false,
-        terminal_velocity_sq: Some(i32::pow(5, 2)),
+        terminal_velocity_sq: Some(u16::pow(5, 2)),
         dispersion_rate: None,
         flammability: 0.6,
         wet_flammability: None,
@@ -195,7 +195,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: true,
-        terminal_velocity_sq: Some(i32::pow(5, 2)),
+        terminal_velocity_sq: Some(u16::pow(5, 2)),
         dispersion_rate: Some(3),
         flammability: 0.9,
         wet_flammability: None,
@@ -225,7 +225,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: false,
         fluid: true,
-        terminal_velocity_sq: Some(i32::pow(5, 2)),
+        terminal_velocity_sq: Some(u16::pow(5, 2)),
         dispersion_rate: Some(1),
         flammability: 0.0,
         wet_flammability: None,
@@ -268,7 +268,7 @@ pub struct Particle {
     original_color: PColor,
     burning: bool,
     moved: Option<bool>,
-    velocity: Option<IVec2>,
+    velocity: Option<I8Vec2>,
     moving_right: Option<bool>,
     condensation_countdown: Option<i16>,
     initial_condensation_countdown: Option<i16>,
@@ -281,7 +281,7 @@ pub struct Particle {
 impl Particle {
     pub fn new(particle_type: ParticleType, rng: &mut ThreadRng) -> Self {
         let (moved, velocity) = if particle_type.properties().moves {
-            (Some(false), Some(IVec2::ZERO))
+            (Some(false), Some(I8Vec2::ZERO))
         } else {
             (None, None)
         };
@@ -339,8 +339,7 @@ impl Particle {
 
     pub fn update(&mut self, mut api: WorldApi) {
         let mut deleted = Deleted::False;
-        let false_premove =
-            |_self: &mut Self, _dxdy: (i16, i16), _api: &mut WorldApi| Deleted::False;
+        let false_premove = |_self: &mut Self, _dxdy: I8Vec2, _api: &mut WorldApi| Deleted::False;
 
         if self.particle_type.properties().moves && self.particle_type.properties().auto_move {
             deleted.update(self.movement(&mut api, false_premove));
@@ -363,7 +362,7 @@ impl Particle {
             }
             ParticleType::Acid => deleted.update(self.movement(
                 &mut api,
-                |particle: &mut Self, dxdy: (i16, i16), api: &mut WorldApi| {
+                |particle: &mut Self, dxdy: I8Vec2, api: &mut WorldApi| {
                     particle.try_decaying(dxdy, api)
                 },
             )),
@@ -398,7 +397,7 @@ impl Particle {
     fn burn(&mut self, api: &mut WorldApi) -> Deleted {
         self.color = Particle::burning_flicker_color(api);
 
-        let dxdy_list = vec![(0, -1), (1, 0), (-1, 0), (0, 1)];
+        let dxdy_list = i8vec2_vector([(0, -1), (1, 0), (-1, 0), (0, 1)]);
 
         for dxdy in dxdy_list.into_iter() {
             let r = api.random();
@@ -418,11 +417,11 @@ impl Particle {
             };
 
             if neighbour_flammability > 0.0 && !neighbour.burning {
-                if neighbour_flammability * (1.0 - 0.5 * dxdy.1 as f32) > r {
+                if neighbour_flammability * (1.0 - 0.5 * dxdy.y as f32) > r {
                     neighbour.set_burning(true);
                 }
             } else if neighbour.particle_type == ParticleType::Empty && self.fuel.unwrap() > 0 {
-                if dxdy.1 < 1 && api.neighbour((-1, 0)).burning && api.neighbour((1, 0)).burning {
+                if dxdy.y < 1 && api.neighbour((-1, 0)).burning && api.neighbour((1, 0)).burning {
                     let mut new_flame = api.new_particle(ParticleType::Flame);
                     new_flame.fuel = Some(api.random_range(0..self.fuel.unwrap()));
                     api.replace_with(dxdy, new_flame);
@@ -465,7 +464,7 @@ impl Particle {
     }
 
     fn grow_fungus(&mut self, api: &mut WorldApi) {
-        let dxdy_list = vec![
+        let dxdy_list = i8vec2_vector([
             (0, -1),
             (0, 1),
             (1, 0),
@@ -474,7 +473,7 @@ impl Particle {
             (1, 1),
             (1, -1),
             (-1, 1),
-        ];
+        ]);
 
         let dxdy = dxdy_list[api.random_range(0..dxdy_list.len())];
         let mut neighbour_clone = api.neighbour(dxdy).clone();
@@ -485,8 +484,8 @@ impl Particle {
 
             if neighbour_clone.particle_type == ParticleType::Empty {
                 let mut count = 0;
-                for (ddx, ddy) in dxdy_list {
-                    let dxdy2 = (dxdy.0 + ddx, dxdy.1 + ddy);
+                for ddxddy in dxdy_list {
+                    let dxdy2 = dxdy + ddxddy;
                     if api.neighbour(dxdy2).particle_type == ParticleType::Fungus {
                         count += 1;
                     }
@@ -537,7 +536,7 @@ impl Particle {
 
     fn movement<F>(&mut self, api: &mut WorldApi, premove_function: F) -> Deleted
     where
-        F: Fn(&mut Self, (i16, i16), &mut WorldApi) -> Deleted,
+        F: Fn(&mut Self, I8Vec2, &mut WorldApi) -> Deleted,
     {
         if self.moved.unwrap() {
             return Deleted::False;
@@ -549,7 +548,7 @@ impl Particle {
 
         if !self.rises() {
             if let Some(vel) = self.velocity.as_mut() {
-                let mag_v_sq = (vel.x).pow(2) + (vel.y).pow(2);
+                let mag_v_sq = vel.length_sq();
                 if mag_v_sq
                     < self
                         .particle_type
@@ -568,19 +567,25 @@ impl Particle {
             // self.fluid_movement(api);
             let last_dir;
             (check_directions, last_dir) = if self.moving_right.unwrap() {
-                (vec![(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)], (-1, 0))
+                (
+                    i8vec2_vector([(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)]),
+                    i8vec2(-1, 0),
+                )
             } else {
-                (vec![(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)], (1, 0))
+                (
+                    i8vec2_vector([(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)]),
+                    i8vec2(1, 0),
+                )
             };
 
             // TODO: Should maybe find a way to use deleted.update here
             (deleted, last_dxdy) = self.movement_loop(api, check_directions, premove_function);
 
             if let Some(last_dxdy) = last_dxdy {
-                if last_dxdy == (-1, 1) {
+                if last_dxdy == (-1, 1).into() {
                     self.moving_right = Some(false)
                 }
-                if last_dxdy == (1, 1) {
+                if last_dxdy == (1, 1).into() {
                     self.moving_right = Some(true)
                 } else if last_dxdy == last_dir {
                     self.moving_right = Some(!self.moving_right.unwrap());
@@ -589,14 +594,14 @@ impl Particle {
         } else {
             // self.sand_movement(api);
             let r = api.random::<bool>();
-            let right: i16 = if r { -1 } else { 1 };
-            check_directions = vec![(0, 1), (right, 1), (0 - right, 1)];
+            let right = if r { -1 } else { 1 };
+            check_directions = i8vec2_vector([(0, 1), (right, 1), (0 - right, 1)]);
             // TODO: Should maybe find a way to use deleted.update here
             (deleted, last_dxdy) = self.movement_loop(api, check_directions, premove_function);
         }
 
-        let last_dxdy = last_dxdy.unwrap_or((1, 0));
-        if last_dxdy.0 != 0 {
+        let last_dxdy = last_dxdy.unwrap_or(i8vec2(1, 0));
+        if last_dxdy.x != 0 {
             if let Some(vel) = self.velocity.as_mut() {
                 vel.y = 0;
             }
@@ -608,35 +613,34 @@ impl Particle {
     fn movement_loop<F>(
         &mut self,
         api: &mut WorldApi,
-        check_directions: Vec<(i16, i16)>,
+        check_directions: Vec<I8Vec2>,
         premove_function: F,
-    ) -> (Deleted, Option<(i16, i16)>)
+    ) -> (Deleted, Option<I8Vec2>)
     where
-        F: Fn(&mut Self, (i16, i16), &mut WorldApi) -> Deleted,
+        F: Fn(&mut Self, I8Vec2, &mut WorldApi) -> Deleted,
     {
         //
-        let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(1) as i16;
+        let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(1) as i8;
         for dxdy in check_directions.into_iter() {
             //
-
             let r = if self.rises() { -1 } else { 1 };
 
-            let dxdy_new = if dxdy.1 == 0 {
-                (dispersion_rate * dxdy.0, dxdy.1)
-            } else if r == 1 && dxdy.0 == 0 {
-                (dxdy.0, self.velocity.unwrap().y as i16)
+            let dxdy_new = if dxdy.y == 0 {
+                i8vec2(dispersion_rate * dxdy.x, dxdy.y)
+            } else if r == 1 && dxdy.x == 0 {
+                i8vec2(dxdy.x, self.velocity.unwrap().y)
             } else {
-                (dxdy.0, r * dxdy.1)
+                i8vec2(dxdy.x, r * dxdy.y)
             };
 
-            let deleted = premove_function(self, dxdy, api);
+            let deleted = premove_function(self, dxdy_new, api);
 
             if deleted == Deleted::True {
                 return (deleted, None);
             } else {
-                if dxdy_new.0.abs() > 1 {
+                if dxdy_new.x.abs() > 1 {
                     self.disperse(dxdy_new, api);
-                } else if dxdy_new.1 > 1 {
+                } else if dxdy_new.y > 1 {
                     self.fall_with_gravity(dxdy_new, api);
                 } else {
                     self.try_moving_to(dxdy_new, api);
@@ -649,16 +653,16 @@ impl Particle {
         (Deleted::False, None)
     }
 
-    fn fall_with_gravity(&mut self, dxdy: (i16, i16), api: &mut WorldApi) {
-        iterate_over_line_delta(dxdy, |dx, dy| {
-            self.try_moving_to((dx, dy), api);
+    fn fall_with_gravity(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
+        iterate_over_line_delta(dxdy.into(), |dx, dy| {
+            self.try_moving_to(i8vec2(dx as i8, dy as i8), api);
             self.moved.unwrap()
         })
     }
 
-    fn disperse(&mut self, dxdy: (i16, i16), api: &mut WorldApi) {
-        iterate_over_line_delta(dxdy, |dx, dy| {
-            let other_type = self.try_moving_to((dx, dy), api);
+    fn disperse(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
+        iterate_over_line_delta(dxdy.into(), |dx, dy| {
+            let other_type = self.try_moving_to(i8vec2(dx as i8, dy as i8), api);
             if let Some(other_type) = other_type {
                 if other_type == ParticleType::Empty {
                     let r = if self.rises() { -1 } else { 1 };
@@ -676,7 +680,7 @@ impl Particle {
         })
     }
 
-    fn try_decaying(&mut self, dxdy: (i16, i16), api: &mut WorldApi) -> Deleted {
+    fn try_decaying(&mut self, dxdy: I8Vec2, api: &mut WorldApi) -> Deleted {
         let other_p = api.neighbour_mut(dxdy);
         if other_p.particle_type != self.particle_type {
             if let Some(other_durability) = other_p.durability.as_mut() {
@@ -698,7 +702,7 @@ impl Particle {
 
     /// Checks if this particle can and will move in the given direction.
     /// Assumes that if it can move there it will (sets self.moved to true)
-    fn try_moving_to(&mut self, dxdy: (i16, i16), api: &mut WorldApi) -> Option<ParticleType> {
+    fn try_moving_to(&mut self, dxdy: I8Vec2, api: &mut WorldApi) -> Option<ParticleType> {
         // let rand_factor = api.random::<f32>();
         let other_p = api.neighbour(dxdy);
         let other_weight = api.neighbour(dxdy).particle_type.properties().weight;
@@ -710,7 +714,7 @@ impl Particle {
         // If the other position is empty, try moving into it
         if other_type == ParticleType::Empty {
             // If we're moving sideways don't compare weights, just do it
-            if dxdy.1 == 0 || Particle::weight_check(api, rises, my_weight, other_weight) {
+            if dxdy.y == 0 || Particle::weight_check(api, rises, my_weight, other_weight) {
                 self.moved = Some(true);
                 api.swap_with(dxdy);
                 return Some(other_type);
@@ -740,88 +744,5 @@ impl Particle {
         } else {
             false
         }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PColor {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
-
-impl std::fmt::Debug for PColor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PColor {{r: {}, g: {}, b: {}}}", self.r, self.g, self.b)
-    }
-}
-
-impl PColor {
-    pub const fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b }
-    }
-
-    // ChatGPT wrote these methods. "The formula used in the implementation is
-    // based on the description provided in the Wikipedia article on HSL and
-    // HSV."
-    fn into_hsv(self) -> (f32, f32, f32) {
-        let r = self.r as f32 / 255.0;
-        let g = self.g as f32 / 255.0;
-        let b = self.b as f32 / 255.0;
-        let cmax = r.max(g).max(b);
-        let cmin = r.min(g).min(b);
-        let delta = cmax - cmin;
-        let h = if delta == 0.0 {
-            0.0
-        } else if cmax == r {
-            60.0 * ((g - b) / delta % 6.0)
-        } else if cmax == g {
-            60.0 * ((b - r) / delta + 2.0)
-        } else {
-            60.0 * ((r - g) / delta + 4.0)
-        };
-        let s = if cmax == 0.0 { 0.0 } else { delta / cmax };
-        let v = cmax;
-        (h, s, v)
-    }
-
-    fn from_hsv(h: f32, s: f32, v: f32) -> Self {
-        let c = v * s;
-        let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
-        let m = v - c;
-        let (r, g, b) = if h < 60.0 {
-            (c, x, 0.0)
-        } else if h < 120.0 {
-            (x, c, 0.0)
-        } else if h < 180.0 {
-            (0.0, c, x)
-        } else if h < 240.0 {
-            (0.0, x, c)
-        } else if h < 300.0 {
-            (x, 0.0, c)
-        } else {
-            (c, 0.0, x)
-        };
-        PColor {
-            r: ((r + m) * 255.0) as u8,
-            g: ((g + m) * 255.0) as u8,
-            b: ((b + m) * 255.0) as u8,
-        }
-    }
-
-    pub fn scale_hsv(&self, rotate_h: f32, scale_s: f32, scale_v: f32) -> Self {
-        let (h, s, v) = self.into_hsv();
-        let h = (h + rotate_h) % 360.0;
-        let s = (s * scale_s).clamp(0.0, 1.0);
-        let v = (v * scale_v).clamp(0.0, 1.0);
-        PColor::from_hsv(h, s, v)
-    }
-
-    pub fn add_hsv(&self, rotate_h: f32, add_s: f32, add_v: f32) -> Self {
-        let (h, s, v) = self.into_hsv();
-        let h = (h + rotate_h) % 360.0;
-        let s = (s + add_s).clamp(0.0, 1.0);
-        let v = (v + add_v).clamp(0.0, 1.0);
-        PColor::from_hsv(h, s, v)
     }
 }

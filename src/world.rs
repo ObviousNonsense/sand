@@ -86,23 +86,35 @@ impl<'a> WorldApi<'a> {
         self.world.rng.gen_range::<T, R>(slice)
     }
 
-    pub fn neighbour(&self, dxdy: (i16, i16)) -> &Particle {
-        self.world.relative_particle(self.xy, dxdy)
+    pub fn neighbour<T>(&self, dxdy: T) -> &Particle
+    where
+        (i16, i16): From<T>,
+    {
+        self.world.relative_particle(self.xy, dxdy.into())
     }
 
-    pub fn neighbour_mut(&mut self, dxdy: (i16, i16)) -> &mut Particle {
-        self.world.relative_particle_mut(self.xy, dxdy)
+    pub fn neighbour_mut<T>(&mut self, dxdy: T) -> &mut Particle
+    where
+        (i16, i16): From<T>,
+    {
+        self.world.relative_particle_mut(self.xy, dxdy.into())
     }
 
-    pub fn swap_with(&mut self, dxdy: (i16, i16)) {
-        let other_xy = self.world.relative_xy(self.xy, dxdy);
+    pub fn swap_with<T>(&mut self, dxdy: T)
+    where
+        (i16, i16): From<T>,
+    {
+        let other_xy = self.world.relative_xy(self.xy, dxdy.into());
         self.world
             .put_particle(self.xy, self.world.get_particle(other_xy).clone());
         self.xy = other_xy;
     }
 
-    pub fn replace_with_new(&mut self, dxdy: (i16, i16), particle_type: ParticleType) {
-        let xy = self.world.relative_xy(self.xy, dxdy);
+    pub fn replace_with_new<T>(&mut self, dxdy: T, particle_type: ParticleType)
+    where
+        (i16, i16): From<T>,
+    {
+        let xy = self.world.relative_xy(self.xy, dxdy.into());
         self.world.add_new_particle(particle_type, xy, true);
     }
 
@@ -110,8 +122,11 @@ impl<'a> WorldApi<'a> {
         Particle::new(particle_type, &mut self.world.rng)
     }
 
-    pub fn replace_with(&mut self, dxdy: (i16, i16), particle: Particle) {
-        let xy = self.world.relative_xy(self.xy, dxdy);
+    pub fn replace_with<T>(&mut self, dxdy: T, particle: Particle)
+    where
+        (i16, i16): From<T>,
+    {
+        let xy = self.world.relative_xy(self.xy, dxdy.into());
         self.world.put_particle(xy, particle);
     }
 
