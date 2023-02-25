@@ -223,7 +223,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         base_color: PColor::new(166, 249, 94),
         weight: 63.0,
         moves: true,
-        auto_move: false,
+        auto_move: true,
         fluid: true,
         terminal_velocity_sq: Some(u16::pow(5, 2)),
         dispersion_rate: Some(1),
@@ -238,9 +238,21 @@ impl ParticleType {
     pub const fn properties(&self) -> ParticleTypeProperties {
         PROPERTIES[*self as usize]
     }
+
+    fn premove_fn(&self) -> Box<dyn Fn(&mut Particle, I8Vec2, &mut WorldApi)> {
+        match self {
+            Self::Acid => Box::new(
+                |particle: &mut Particle, dxdy: I8Vec2, api: &mut WorldApi| {
+                    particle.try_decaying(dxdy, api);
+                },
+            ),
+            _ => Box::new(|_self: &mut Particle, _dxdy: I8Vec2, _api: &mut WorldApi| {}),
+        }
+    }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+#[repr(u8)]
 enum Status {
     Deleted,
     Alive,
@@ -266,6 +278,7 @@ pub struct Particle {
     pub updated: bool,
     pub color: PColor,
     original_color: PColor,
+    status: Status,
     burning: bool,
     moved: Option<bool>,
     velocity: Option<I8Vec2>,
@@ -325,6 +338,7 @@ impl Particle {
             updated: false,
             color,
             original_color: color,
+            status: Status::Alive,
             burning,
             moved,
             velocity,
@@ -338,42 +352,33 @@ impl Particle {
     }
 
     pub fn update(&mut self, mut api: WorldApi) {
-        let mut status = Status::Alive;
-        let false_premove = |_self: &mut Self, _dxdy: I8Vec2, _api: &mut WorldApi| Status::Alive;
-
         if self.particle_type.properties().moves && self.particle_type.properties().auto_move {
-            status.update(self.movement(&mut api, false_premove));
+            self.movement(&mut api);
         }
 
         match self.particle_type {
             ParticleType::Steam => {
                 let lasty = api.xy().1;
-                self.movement(&mut api, false_premove);
-                status.update(self.update_condensation(&mut api, lasty));
+                self.movement(&mut api);
+                self.update_condensation(&mut api, lasty);
             }
             ParticleType::Fungus => {
                 self.grow_fungus(&mut api);
             }
             ParticleType::Flame => {
                 if !self.burning {
-                    status = Status::Deleted;
+                    self.status = Status::Deleted;
                     api.replace_with_new((0, 0), ParticleType::Empty);
                 }
             }
-            ParticleType::Acid => status.update(self.movement(
-                &mut api,
-                |particle: &mut Self, dxdy: I8Vec2, api: &mut WorldApi| {
-                    particle.try_decaying(dxdy, api)
-                },
-            )),
             _ => {}
         }
 
         if self.burning {
-            status.update(self.burn(&mut api));
+            self.burn(&mut api);
         }
 
-        if status == Status::Alive {
+        if self.status == Status::Alive {
             api.update_in_world(self.to_owned());
         }
     }
@@ -395,7 +400,7 @@ impl Particle {
         }
     }
 
-    fn burn(&mut self, api: &mut WorldApi) -> Status {
+    fn burn(&mut self, api: &mut WorldApi) {
         self.color = Particle::burning_flicker_color(api);
 
         let dxdy_list = i8vec2_vector([(0, -1), (1, 0), (-1, 0), (0, 1)]);
@@ -438,10 +443,11 @@ impl Particle {
             *fuel -= 1;
             if *fuel < 0 {
                 api.replace_with_new((0, 0), ParticleType::Empty);
-                return Status::Deleted;
+                self.status.update(Status::Deleted);
+                return;
             }
         }
-        Status::Alive
+        self.status.update(Status::Alive);
     }
 
     fn burning_flicker_color(api: &mut WorldApi) -> PColor {
@@ -513,19 +519,20 @@ impl Particle {
 
 /// Condensation methods
 impl Particle {
-    fn update_condensation(&mut self, api: &mut WorldApi, lasty: usize) -> Status {
+    fn update_condensation(&mut self, api: &mut WorldApi, lasty: usize) {
         if api.xy().1 == lasty {
             if let Some(count) = self.condensation_countdown.as_mut() {
                 *count -= 1;
                 if *count <= 0 {
                     api.replace_with_new((0, 0), ParticleType::Water);
-                    return Status::Deleted;
+                    self.status.update(Status::Deleted);
+                    return;
                 }
             }
         } else {
             self.condensation_countdown = self.initial_condensation_countdown;
         }
-        Status::Alive
+        self.status.update(Status::Alive);
     }
 }
 
@@ -535,17 +542,12 @@ impl Particle {
         self.particle_type.properties().weight < ParticleType::Empty.properties().weight
     }
 
-    fn movement<F>(&mut self, api: &mut WorldApi, premove_function: F) -> Status
-    where
-        F: Fn(&mut Self, I8Vec2, &mut WorldApi) -> Status,
-    {
+    fn movement(&mut self, api: &mut WorldApi) {
         if self.moved.unwrap() {
-            return Status::Alive;
+            return;
         }
 
-        // println!("here");
         let check_directions;
-        let status;
 
         // Apply gravity to things that don't rise
         if !self.rises() {
@@ -566,7 +568,6 @@ impl Particle {
         let last_dir;
 
         if self.particle_type.properties().fluid {
-            // self.fluid_movement(api);
             check_directions = if self.moving_right.unwrap() {
                 i8vec2_vector([(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)])
             } else {
@@ -575,8 +576,7 @@ impl Particle {
 
             let last_possible_dir = check_directions[4].clone();
 
-            // TODO: Should maybe find a way to use status.update here
-            (status, last_dir) = self.movement_loop(api, check_directions, premove_function);
+            last_dir = self.movement_loop(api, check_directions);
 
             if let Some(last_dxdy) = last_dir {
                 if last_dxdy == (-1, 1).into() {
@@ -589,12 +589,10 @@ impl Particle {
                 }
             }
         } else {
-            // self.sand_movement(api);
             let r = api.random::<bool>();
             let right = if r { -1 } else { 1 };
             check_directions = i8vec2_vector([(0, 1), (right, 1), (0 - right, 1)]);
-            // TODO: Should maybe find a way to use status.update here
-            (status, last_dir) = self.movement_loop(api, check_directions, premove_function);
+            last_dir = self.movement_loop(api, check_directions);
         }
 
         let last_dxdy = last_dir.unwrap_or(i8vec2(1, 0));
@@ -605,51 +603,39 @@ impl Particle {
                 vel.y = 0;
             }
         }
-
-        status
     }
 
-    fn movement_loop<F>(
+    fn movement_loop(
         &mut self,
         api: &mut WorldApi,
         check_directions: Vec<I8Vec2>,
-        premove_function: F,
-    ) -> (Status, Option<I8Vec2>)
-    where
-        F: Fn(&mut Self, I8Vec2, &mut WorldApi) -> Status,
-    {
+    ) -> Option<I8Vec2> {
         //
         let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(1) as i8;
-        for dxdy in check_directions.into_iter() {
+        for dir in check_directions.into_iter() {
             //
             let r = if self.rises() { -1 } else { 1 };
 
-            let dxdy_new = if dxdy.y == 0 {
-                i8vec2(dispersion_rate * dxdy.x, dxdy.y)
-            } else if r == 1 && dxdy.x == 0 {
-                i8vec2(dxdy.x, self.velocity.unwrap().y)
+            let dxdy = if dir.y == 0 {
+                i8vec2(dispersion_rate * dir.x, dir.y)
+            } else if r == 1 && dir.x == 0 {
+                i8vec2(dir.x, self.velocity.unwrap().y)
             } else {
-                i8vec2(dxdy.x, r * dxdy.y)
+                i8vec2(dir.x, r * dir.y)
             };
 
-            let status = premove_function(self, dxdy_new, api);
-
-            if status == Status::Deleted {
-                return (status, None);
+            if dxdy.x.abs() > 1 {
+                self.disperse(dxdy, api);
+            } else if dxdy.y > 1 {
+                self.fall_with_gravity(dxdy, api);
             } else {
-                if dxdy_new.x.abs() > 1 {
-                    self.disperse(dxdy_new, api);
-                } else if dxdy_new.y > 1 {
-                    self.fall_with_gravity(dxdy_new, api);
-                } else {
-                    self.try_moving_to(dxdy_new, api);
-                }
-                if self.moved.unwrap() {
-                    return (status, Some(dxdy));
-                }
+                self.try_moving_to(dxdy, api);
+            }
+            if self.moved.unwrap() {
+                return Some(dir);
             }
         }
-        (Status::Alive, None)
+        None
     }
 
     fn fall_with_gravity(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
@@ -679,7 +665,7 @@ impl Particle {
         })
     }
 
-    fn try_decaying(&mut self, dxdy: I8Vec2, api: &mut WorldApi) -> Status {
+    fn try_decaying(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
         let other_p = api.neighbour_mut(dxdy);
         if other_p.particle_type != self.particle_type {
             if let Some(other_durability) = other_p.durability.as_mut() {
@@ -692,17 +678,22 @@ impl Particle {
                 }
                 if self.durability.unwrap() < 0 {
                     api.replace_with_new((0, 0), ParticleType::Empty);
-                    return Status::Deleted;
+                    self.status.update(Status::Deleted);
                 }
             }
         }
-        Status::Alive
+        self.status.update(Status::Alive);
     }
 
     /// Checks if this particle can and will move in the given direction.
     /// Assumes that if it can move there it will (sets self.moved to true)
     fn try_moving_to(&mut self, dxdy: I8Vec2, api: &mut WorldApi) -> Option<ParticleType> {
-        // let rand_factor = api.random::<f32>();
+        let premove_fn = self.particle_type.premove_fn();
+        premove_fn(self, dxdy, api);
+        if self.status == Status::Deleted {
+            return None;
+        }
+
         let other_p = api.neighbour(dxdy);
         let other_weight = api.neighbour(dxdy).particle_type.properties().weight;
 
