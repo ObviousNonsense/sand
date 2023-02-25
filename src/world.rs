@@ -39,7 +39,7 @@ pub enum Direction {
 }
 
 impl Direction {
-    fn dxdy(&self) -> (isize, isize) {
+    fn dxdy(&self) -> (i16, i16) {
         match self {
             Direction::Up => (0, -1),
             Direction::Right => (1, 0),
@@ -86,23 +86,35 @@ impl<'a> WorldApi<'a> {
         self.world.rng.gen_range::<T, R>(slice)
     }
 
-    pub fn neighbour(&self, dxdy: (isize, isize)) -> &Particle {
-        self.world.relative_particle(self.xy, dxdy)
+    pub fn neighbour<T>(&self, dxdy: T) -> &Particle
+    where
+        (i16, i16): From<T>,
+    {
+        self.world.relative_particle(self.xy, dxdy.into())
     }
 
-    pub fn neighbour_mut(&mut self, dxdy: (isize, isize)) -> &mut Particle {
-        self.world.relative_particle_mut(self.xy, dxdy)
+    pub fn neighbour_mut<T>(&mut self, dxdy: T) -> &mut Particle
+    where
+        (i16, i16): From<T>,
+    {
+        self.world.relative_particle_mut(self.xy, dxdy.into())
     }
 
-    pub fn swap_with(&mut self, dxdy: (isize, isize)) {
-        let other_xy = self.world.relative_xy(self.xy, dxdy);
+    pub fn swap_with<T>(&mut self, dxdy: T)
+    where
+        (i16, i16): From<T>,
+    {
+        let other_xy = self.world.relative_xy(self.xy, dxdy.into());
         self.world
             .put_particle(self.xy, self.world.get_particle(other_xy).clone());
         self.xy = other_xy;
     }
 
-    pub fn replace_with_new(&mut self, dxdy: (isize, isize), particle_type: ParticleType) {
-        let xy = self.world.relative_xy(self.xy, dxdy);
+    pub fn replace_with_new<T>(&mut self, dxdy: T, particle_type: ParticleType)
+    where
+        (i16, i16): From<T>,
+    {
+        let xy = self.world.relative_xy(self.xy, dxdy.into());
         self.world.add_new_particle(particle_type, xy, true);
     }
 
@@ -110,8 +122,11 @@ impl<'a> WorldApi<'a> {
         Particle::new(particle_type, &mut self.world.rng)
     }
 
-    pub fn replace_with(&mut self, dxdy: (isize, isize), particle: Particle) {
-        let xy = self.world.relative_xy(self.xy, dxdy);
+    pub fn replace_with<T>(&mut self, dxdy: T, particle: Particle)
+    where
+        (i16, i16): From<T>,
+    {
+        let xy = self.world.relative_xy(self.xy, dxdy.into());
         self.world.put_particle(xy, particle);
     }
 
@@ -260,24 +275,6 @@ impl World {
     }
 
     fn update_all_particles(&mut self) {
-        // TODO: Consider pre-generating this and storing it (either pass it
-        // into the function or store it in the struct and clone it here)
-        // let mut idx_range: Vec<usize> =
-        //     ((self.width + 1)..(self.width * self.height - 2)).collect();
-        // idx_range.shuffle(&mut self.rng);
-        // for idx in idx_range.into_iter() {
-        //     // let idx = *idx;
-        //     let xy = self.index_to_xy(idx);
-
-        //     let mut particle_clone = self.get_particle(xy).clone();
-
-        //     if particle_clone.particle_type == ParticleType::Empty || particle_clone.updated {
-        //         continue;
-        //     }
-
-        //     particle_clone.update(WorldApi { world: self, xy });
-        // }
-
         let num_chunks_x = self.width / self.chunk_size;
         let num_chunks_y = self.height / self.chunk_size;
 
@@ -296,8 +293,6 @@ impl World {
                         let local_xy = self.local_index_to_xy(*idx);
 
                         // Clone the particle and make sure it hasn't been updated
-                        // let mut particle_clone =
-                        //     self.chunk_grid[(*chunk_x, *chunk_y)].particle_grid[(local_xy)].clone();
 
                         let particle =
                             &self.chunk_grid[(*chunk_x, *chunk_y)].particle_grid[(local_xy)];
@@ -470,11 +465,6 @@ impl World {
         }
     }
 
-    // TODO: Consider pre-calculating this and storing it as a vector
-    // fn index_to_xy(&self, i: usize) -> (usize, usize) {
-    //     (i % self.width, i / self.width)
-    // }
-
     fn local_index_to_xy(&self, i: usize) -> (usize, usize) {
         (i % self.chunk_size, i / self.chunk_size)
     }
@@ -528,7 +518,7 @@ impl World {
         // Wake up neighbouring chunk if we're within 2 spaces of it (and not on
         // the edge)
         let wake_range = 1;
-        if local_x <= wake_range - 1 && chunk_x != 0 {
+        if local_x < wake_range && chunk_x != 0 {
             self.chunk_grid[(chunk_x - 1, chunk_y)].update_next_frame = true;
         } else if local_x >= self.chunk_size - wake_range
             && chunk_x != (self.width / self.chunk_size) - 1
@@ -536,7 +526,7 @@ impl World {
             self.chunk_grid[(chunk_x + 1, chunk_y)].update_next_frame = true;
         }
 
-        if local_y <= wake_range - 1 && chunk_y != 0 {
+        if local_y < wake_range && chunk_y != 0 {
             self.chunk_grid[(chunk_x, chunk_y - 1)].update_next_frame = true;
         } else if local_y >= self.chunk_size - wake_range
             && chunk_y != (self.height / self.chunk_size) - 1
@@ -545,22 +535,21 @@ impl World {
         }
     }
 
-    fn relative_particle(&self, xy: (usize, usize), dxdy: (isize, isize)) -> &Particle {
+    fn relative_particle(&self, xy: (usize, usize), dxdy: (i16, i16)) -> &Particle {
         self.get_particle(self.relative_xy(xy, dxdy))
     }
 
-    fn relative_particle_mut(&mut self, xy: (usize, usize), dxdy: (isize, isize)) -> &mut Particle {
+    fn relative_particle_mut(&mut self, xy: (usize, usize), dxdy: (i16, i16)) -> &mut Particle {
         self.get_particle_mut(self.relative_xy(xy, dxdy))
     }
 
-    fn relative_xy(&self, xy: (usize, usize), dxdy: (isize, isize)) -> (usize, usize) {
+    fn relative_xy(&self, xy: (usize, usize), dxdy: (i16, i16)) -> (usize, usize) {
         // dbg!(xy, dxdy);
         if let Some(portal) = &self.portal_grid[xy] {
             if let Some(xy2) = portal.partner_xy {
                 // Might want a bit more logic to make this more comprehensive
                 if dxdy.0 != 0 && dxdy.1 != 0 {
-                    return self
-                        .relative_xy(((xy.0 as isize + dxdy.0) as usize, xy.1), (0, dxdy.1));
+                    return self.relative_xy(((xy.0 as i16 + dxdy.0) as usize, xy.1), (0, dxdy.1));
                 }
 
                 let portal_dxdy = portal.direction.dxdy();
@@ -572,8 +561,8 @@ impl World {
         }
 
         (
-            (xy.0 as isize + dxdy.0) as usize,
-            (xy.1 as isize + dxdy.1) as usize,
+            (xy.0 as i16 + dxdy.0) as usize,
+            (xy.1 as i16 + dxdy.1) as usize,
         )
     }
 }
@@ -581,9 +570,9 @@ impl World {
 // ───────────────────────────────────────────────────────────────────────────────────────────── ✣ ─
 // Adapted from https://gist.github.com/DavidMcLaughlin208/60e69e698e3858617c322d80a8f174e2
 // via https://www.youtube.com/watch?v=5Ka3tbbT-9E&list=WL&index=28&t=1112s
-fn iterate_over_line_common<F>(dx: isize, dy: isize, mut inner_function: F)
+fn iterate_over_line_common<F>(dx: i16, dy: i16, mut inner_function: F)
 where
-    F: FnMut(isize, isize, isize, isize) -> bool,
+    F: FnMut(i16, i16, i16, i16) -> bool,
 {
     if dx == 0 && dy == 0 {
         inner_function(0, 0, 0, 0);
@@ -595,8 +584,8 @@ where
     let x_modifier = if dx < 0 { 1 } else { -1 };
     let y_modifier = if dy < 0 { 1 } else { -1 };
 
-    let longer_side_length = isize::max(dx.abs(), dy.abs());
-    let shorter_side_length = isize::min(dx.abs(), dy.abs());
+    let longer_side_length = i16::max(dx.abs(), dy.abs());
+    let shorter_side_length = i16::min(dx.abs(), dy.abs());
 
     let slope = if shorter_side_length == 0 || longer_side_length == 0 {
         0.0
@@ -608,7 +597,7 @@ where
     let mut prev_y = 0;
     let mut shorter_side_increase;
     for i in 1..=longer_side_length {
-        shorter_side_increase = (i as f32 * slope).round() as isize;
+        shorter_side_increase = (i as f32 * slope).round() as i16;
         let (x_increase, y_increase) = if dx_is_larger {
             (i, shorter_side_increase)
         } else {
@@ -617,8 +606,8 @@ where
 
         let current_x = x_increase * x_modifier;
         let current_y = y_increase * y_modifier;
-        let delta_x = current_x - prev_x;
-        let delta_y = current_y - prev_y;
+        let delta_x = prev_x - current_x;
+        let delta_y = prev_y - current_y;
         if !inner_function(current_x, current_y, delta_x, delta_y) {
             break;
         };
@@ -631,19 +620,19 @@ pub fn iterate_over_line<F>(xy1: (usize, usize), xy2: (usize, usize), mut inner_
 where
     F: FnMut(usize, usize),
 {
-    let dx = xy1.0 as isize - xy2.0 as isize;
-    let dy = xy1.1 as isize - xy2.1 as isize;
+    let dx = xy1.0 as i16 - xy2.0 as i16;
+    let dy = xy1.1 as i16 - xy2.1 as i16;
     iterate_over_line_common(dx, dy, |delta_x, delta_y, _, _| {
-        let current_x = (xy1.0 as isize + delta_x) as usize;
-        let current_y = (xy1.1 as isize + delta_y) as usize;
+        let current_x = (xy1.0 as i16 + delta_x) as usize;
+        let current_y = (xy1.1 as i16 + delta_y) as usize;
         inner_function(current_x, current_y);
         true // always continue iteration
     });
 }
 
-pub fn iterate_over_line_delta<F>(dxdy: (isize, isize), mut inner_function: F)
+pub fn iterate_over_line_delta<F>(dxdy: (i16, i16), mut inner_function: F)
 where
-    F: FnMut(isize, isize) -> bool,
+    F: FnMut(i16, i16) -> bool,
 {
     iterate_over_line_common(dxdy.0, dxdy.1, |_, _, dx, dy| inner_function(dx, dy));
 }

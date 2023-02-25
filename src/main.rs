@@ -1,9 +1,11 @@
 use egui_macroquad::{egui, egui::RichText, *};
+use helpers::*;
 use macroquad::prelude::*;
 use particle::*;
 use std::iter::Cycle;
 use world::*;
 
+mod helpers;
 mod particle;
 mod world;
 
@@ -32,7 +34,7 @@ async fn main() {
     // let _profiler = dhat::Profiler::new_heap();
     // color_eyre::install()?;
 
-    let mut color_cycle: Cycle<std::vec::IntoIter<particle::PColor>> = vec![
+    let mut color_cycle: Cycle<std::vec::IntoIter<PColor>> = vec![
         RED.into(),
         LIME.into(),
         VIOLET.into(),
@@ -46,9 +48,9 @@ async fn main() {
     .cycle();
 
     let chunk_size = 16;
-    let world_height = 12 * chunk_size;
-    let world_width = 12 * chunk_size;
-    let pixels_per_particle = 4;
+    let world_height = 8 * chunk_size;
+    let world_width = 8 * chunk_size;
+    let pixels_per_particle = 6;
 
     let painter = Painter::new(
         300.0,
@@ -342,12 +344,6 @@ impl Painter {
                 ..Default::default()
             },
         );
-        // build_textures_atlas();
-        // tex.delete();
-        // unsafe {
-        //     // macroquad::window::get_internal_gl().flush();
-        //     miniquad::native::gl::glFlush();
-        // };
     }
 
     fn debug_chunk(&self, x: usize, y: usize, width: usize, height: usize, text: &str) {
@@ -767,11 +763,6 @@ fn create_placeable(settings: &mut Settings, world: &mut World, xy: (usize, usiz
                 if settings.last_portal_placed.len() == settings.brush_size as usize {
                     settings.waiting_for_partner_portal = true;
                 }
-                // let last_portal_placed = match settings.last_portal_placed {
-                //     Some(_) => None,
-                //     None => Some(xy),
-                // };
-                // settings.last_portal_placed = last_portal_placed;
 
                 if settings.debug_mode {
                     println!(
@@ -1039,14 +1030,6 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                         settings.placement_type = settings.last_placement_type;
                     }
 
-                    // ui.visuals_mut().selection = egui::style::Selection {
-                    //     bg_fill: egui::Color32::from_white_alpha(100),
-                    //     stroke: egui::Stroke {
-                    //         width: 10.0,
-                    //         color: egui::Color32::RED,
-                    //     },
-                    // };
-
                     particle_selector(ui, ParticleType::Sand, settings);
                     particle_selector(ui, ParticleType::Water, settings);
                     particle_selector(ui, ParticleType::Concrete, settings);
@@ -1109,13 +1092,9 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                 ui.label(format!("{:#?}", settings));
             });
             egui::CollapsingHeader::new("Particle Under Mouse").show(ui, |ui| {
-                // let (mousex, mousey) = settings.painter.mouse_location(grid_width, grid_height)
                 ui.label(debug_particle_string(world, &settings.painter));
             });
         });
-    // ui.group(|ui| {
-    //     // ui.label(debug_particle_string(world, &settings.painter));
-    // });
     // }
 }
 
