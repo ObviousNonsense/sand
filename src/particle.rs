@@ -1,5 +1,6 @@
 use super::*;
 use ::rand::{rngs::ThreadRng, Rng};
+use helpers::{DN, DN_L, DN_R, LEFT, RIGHT, UP, UP_L, UP_R};
 
 #[derive(Debug, Clone, Copy)]
 // The immutable properties of a particle type
@@ -90,7 +91,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         moves: true,
         auto_move: true,
         fluid: false,
-        terminal_velocity_sq: Some(u16::pow(5, 2)),
+        terminal_velocity_sq: Some(u16::pow(10, 2)),
         dispersion_rate: None,
         flammability: 0.0,
         wet_flammability: None,
@@ -196,7 +197,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         auto_move: true,
         fluid: true,
         terminal_velocity_sq: Some(u16::pow(5, 2)),
-        dispersion_rate: Some(3),
+        dispersion_rate: Some(5),
         flammability: 0.9,
         wet_flammability: None,
         base_fuel: Some(25),
@@ -565,94 +566,145 @@ impl Particle {
             }
         }
 
+        // let mut last_dir = None;
         let last_dir;
 
         if self.particle_type.properties().fluid {
+            // fluid movement
+
             check_directions = if self.moving_right.unwrap() {
-                i8vec2_vector([(0, 1), (1, 1), (-1, 1), (1, 0), (-1, 0)])
+                vec![DN, DN_R, DN_L, RIGHT, LEFT]
             } else {
-                i8vec2_vector([(0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0)])
+                vec![DN, DN_L, DN_R, LEFT, RIGHT]
             };
 
-            let last_possible_dir = check_directions[4].clone();
+            let last_direction_to_check = check_directions[4].clone();
 
-            last_dir = self.movement_loop(api, check_directions);
+            last_dir = self.movement_loop_fluid(api, check_directions);
 
-            if let Some(last_dxdy) = last_dir {
-                if last_dxdy == (-1, 1).into() {
+            if let Some(last_dir) = last_dir {
+                if last_dir == DN_L.into() {
                     self.moving_right = Some(false)
                 }
-                if last_dxdy == (1, 1).into() {
+                if last_dir == DN_R.into() {
                     self.moving_right = Some(true)
-                } else if last_dxdy == last_possible_dir {
+                } else if last_dir == last_direction_to_check {
                     self.moving_right = Some(!self.moving_right.unwrap());
                 }
             }
         } else {
-            let r = api.random::<bool>();
-            let right = if r { -1 } else { 1 };
-            check_directions = i8vec2_vector([(0, 1), (right, 1), (0 - right, 1)]);
-            last_dir = self.movement_loop(api, check_directions);
+            // solid movement
+            let vx = self.velocity.unwrap().x;
+            check_directions = if vx == 0 {
+                if api.random() {
+                    vec![DN, DN_R, DN_L, RIGHT, LEFT]
+                } else {
+                    vec![DN, DN_L, DN_R, LEFT, RIGHT]
+                }
+            } else if vx > 0 {
+                vec![DN, DN_R, DN_L, RIGHT, LEFT]
+            } else {
+                vec![DN, DN_L, DN_R, LEFT, RIGHT]
+            };
+            self.movement_loop_solid(api, check_directions);
         }
+    }
 
-        let last_dxdy = last_dir.unwrap_or(i8vec2(1, 0));
+    fn movement_loop_solid(&mut self, api: &mut WorldApi, check_directions: Vec<I8Vec2>) {
+        //
+        for dir in check_directions.into_iter() {
+            //
+            let velocity = self.velocity.unwrap();
+            if dir.y == 0 && velocity.x == 0 {
+                return;
+            }
 
-        // Reset vertical velocity if we've stopped (could maybe just slow down instead?)
-        if last_dxdy.x != 0 {
-            if let Some(vel) = self.velocity.as_mut() {
-                vel.y = 0;
+            let dxdy = if dir.y == 0 {
+                i8vec2(dir.x, 0)
+            } else if dir.x == 0 {
+                i8vec2(0, velocity.y * dir.y)
+            } else {
+                dir
+            };
+
+            if dxdy.x.abs() > 1 {
+                self.try_moving_horizontal_until_gap(dxdy, api);
+            } else if dxdy.y.abs() > 1 {
+                self.try_moving_along_line(dxdy, api);
+            } else {
+                self.try_moving_one_space(dxdy, api);
+            }
+            if self.moved.unwrap() {
+                return;
+            } else {
+                if let Some(vel) = self.velocity.as_mut() {
+                    if dir == DN {
+                        vel.x += vel.y;
+                        vel.x = i8::max(vel.x - 2 as i8, 0);
+                        vel.y = 0;
+                    }
+                }
             }
         }
     }
 
-    fn movement_loop(
+    fn movement_loop_fluid(
         &mut self,
         api: &mut WorldApi,
         check_directions: Vec<I8Vec2>,
     ) -> Option<I8Vec2> {
         //
-        let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(1) as i8;
+        let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(0) as i8;
         for dir in check_directions.into_iter() {
             //
+            let velocity = self.velocity.unwrap();
             let r = if self.rises() { -1 } else { 1 };
 
             let dxdy = if dir.y == 0 {
-                i8vec2(dispersion_rate * dir.x, dir.y)
+                i8vec2((dispersion_rate + velocity.x) * dir.x, 0)
             } else if r == 1 && dir.x == 0 {
-                i8vec2(dir.x, self.velocity.unwrap().y)
+                i8vec2(0, velocity.y * dir.y)
             } else {
                 i8vec2(dir.x, r * dir.y)
             };
 
             if dxdy.x.abs() > 1 {
-                self.disperse(dxdy, api);
-            } else if dxdy.y > 1 {
-                self.fall_with_gravity(dxdy, api);
+                self.try_moving_horizontal_until_gap(dxdy, api);
+            } else if dxdy.y.abs() > 1 {
+                self.try_moving_along_line(dxdy, api);
             } else {
-                self.try_moving_to(dxdy, api);
+                self.try_moving_one_space(dxdy, api);
             }
             if self.moved.unwrap() {
                 return Some(dir);
+            } else {
+                if let Some(vel) = self.velocity.as_mut() {
+                    if dir == DN {
+                        vel.x += vel.y;
+                        vel.x = i8::max(vel.x - 2 as i8, 0);
+                        vel.y = 0;
+                    }
+                }
             }
         }
         None
     }
 
-    fn fall_with_gravity(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
+    fn try_moving_along_line(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
         iterate_over_line_delta(dxdy.into(), |dx, dy| {
-            self.try_moving_to(i8vec2(dx as i8, dy as i8), api);
+            self.try_moving_one_space(i8vec2(dx as i8, dy as i8), api);
             self.moved.unwrap()
         })
     }
 
-    fn disperse(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
+    fn try_moving_horizontal_until_gap(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
         iterate_over_line_delta(dxdy.into(), |dx, dy| {
-            let other_type = self.try_moving_to(i8vec2(dx as i8, dy as i8), api);
+            let other_type = self.try_moving_one_space(i8vec2(dx as i8, dy as i8), api);
             if let Some(other_type) = other_type {
                 if other_type == ParticleType::Empty {
                     let r = if self.rises() { -1 } else { 1 };
                     if api.neighbour((0, r)).particle_type == ParticleType::Empty
-                        && api.neighbour((dx.signum(), r)).particle_type == ParticleType::Empty
+                    // && api.neighbour((-dx.signum(), r)).particle_type == ParticleType::Empty
                     {
                         return false;
                     }
@@ -687,7 +739,7 @@ impl Particle {
 
     /// Checks if this particle can and will move in the given direction.
     /// Assumes that if it can move there it will (sets self.moved to true)
-    fn try_moving_to(&mut self, dxdy: I8Vec2, api: &mut WorldApi) -> Option<ParticleType> {
+    fn try_moving_one_space(&mut self, dxdy: I8Vec2, api: &mut WorldApi) -> Option<ParticleType> {
         let premove_fn = self.particle_type.premove_fn();
         premove_fn(self, dxdy, api);
         if self.status == Status::Deleted {
@@ -707,7 +759,7 @@ impl Particle {
             if dxdy.y == 0 || Particle::weight_check(api, rises, my_weight, other_weight) {
                 self.moved = Some(true);
                 api.swap_with(dxdy);
-                return Some(other_type);
+                // return Some(other_type);
             }
         } else if other_p.particle_type.properties().moves && !other_p.moved.unwrap() {
             // If there's something there and it's moveable and it hasn't
@@ -717,10 +769,10 @@ impl Particle {
                 other_p_mut.moved = Some(true);
                 self.moved = Some(true);
                 api.swap_with(dxdy);
-                return Some(other_type);
+                // return Some(other_type);
             }
         }
-        None
+        Some(other_type)
     }
 
     // #[rustfmt::skip]

@@ -24,6 +24,15 @@ where
     input_collection.into_iter().map(|x| x.into()).collect()
 }
 
+pub const UP: I8Vec2 = I8Vec2::NEG_Y;
+pub const DN: I8Vec2 = I8Vec2::Y;
+pub const LEFT: I8Vec2 = I8Vec2::NEG_X;
+pub const RIGHT: I8Vec2 = I8Vec2::X;
+pub const UP_L: I8Vec2 = I8Vec2::new(-1, -1);
+pub const UP_R: I8Vec2 = I8Vec2::new(1, -1);
+pub const DN_L: I8Vec2 = I8Vec2::new(-1, 1);
+pub const DN_R: I8Vec2 = I8Vec2::new(1, 1);
+
 // Copied from glam IVec2
 impl I8Vec2 {
     /// All zeroes.
@@ -60,6 +69,53 @@ impl I8Vec2 {
     #[inline]
     pub const fn splat(v: i8) -> Self {
         Self { x: v, y: v }
+    }
+
+    /// Returns a vector containing the absolute value of each element of `self`.
+    #[inline]
+    pub fn abs(self) -> Self {
+        Self {
+            x: self.x.abs(),
+            y: self.y.abs(),
+        }
+    }
+
+    /// Returns a vector containing the minimum values for each element of `self` and `rhs`.
+    ///
+    /// In other words this computes `[self.x.min(rhs.x), self.y.min(rhs.y), ..]`.
+    #[inline]
+    pub fn min(self, rhs: Self) -> Self {
+        Self {
+            x: self.x.min(rhs.x),
+            y: self.y.min(rhs.y),
+        }
+    }
+
+    /// Returns a vector containing the maximum values for each element of `self` and `rhs`.
+    ///
+    /// In other words this computes `[self.x.max(rhs.x), self.y.max(rhs.y), ..]`.
+    #[inline]
+    pub fn max(self, rhs: Self) -> Self {
+        Self {
+            x: self.x.max(rhs.x),
+            y: self.y.max(rhs.y),
+        }
+    }
+
+    /// Component-wise clamping of values, similar to [`i32::clamp`].
+    ///
+    /// Each element in `min` must be less-or-equal to the corresponding element in `max`.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `min` is greater than `max` when `glam_assert` is enabled.
+    #[inline]
+    pub fn clamp(self, min: Self, max: Self) -> Self {
+        assert!(
+            min.x <= max.x && min.y <= max.y,
+            "clamp: expected min <= max"
+        );
+        self.max(min).min(max)
     }
 
     pub fn length_sq(&self) -> u16 {
