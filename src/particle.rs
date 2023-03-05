@@ -19,6 +19,7 @@ pub struct ParticleTypeProperties {
     pub wet_flammability: Option<f32>,
     pub base_fuel: Option<i16>,
     pub base_durability: Option<i16>,
+    pub inertial_resistance: Option<f32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,6 +55,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: None,
+        inertial_resistance: None,
     },
     // Concrete = 1
     ParticleTypeProperties {
@@ -69,11 +71,12 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: Some(100),
+        inertial_resistance: None,
     },
     // Empty = 2
     ParticleTypeProperties {
         label: "Empty",
-        base_color: PColor::new(51, 51, 51),
+        base_color: PColor::new(80, 80, 80),
         weight: 1.0,
         moves: false,
         auto_move: false,
@@ -84,6 +87,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: None,
+        inertial_resistance: None,
     },
     // Sand = 3
     ParticleTypeProperties {
@@ -99,6 +103,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: Some(20),
+        inertial_resistance: Some(0.),
     },
     // Water = 4
     ParticleTypeProperties {
@@ -114,6 +119,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: None,
+        inertial_resistance: None,
     },
     // Steam = 5
     ParticleTypeProperties {
@@ -129,6 +135,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: None,
+        inertial_resistance: None,
     },
     // Fungus = 6
     ParticleTypeProperties {
@@ -144,6 +151,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: Some(0.015),
         base_fuel: Some(35),
         base_durability: Some(10),
+        inertial_resistance: None,
     },
     // Flame = 7
     ParticleTypeProperties {
@@ -159,6 +167,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: Some(0),
         base_durability: None,
+        inertial_resistance: None,
     },
     // Methane = 8
     ParticleTypeProperties {
@@ -174,21 +183,23 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: Some(6),
         base_durability: None,
+        inertial_resistance: None,
     },
     // Gunpowder = 9
     ParticleTypeProperties {
-        label: "Gunpowder",
-        base_color: PColor::new(0, 0, 0),
+        label: "Coal",
+        base_color: PColor::new(5, 5, 5),
         weight: 90.0,
         moves: true,
         auto_move: true,
         fluid: false,
         terminal_velocity_sq: Some(u16::pow(5, 2)),
         dispersion_rate: None,
-        flammability: 0.6,
+        flammability: 0.05,
         wet_flammability: None,
-        base_fuel: Some(35),
+        base_fuel: Some(1000),
         base_durability: Some(20),
+        inertial_resistance: Some(0.7),
     },
     // Oil = 10
     ParticleTypeProperties {
@@ -204,6 +215,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: Some(25),
         base_durability: None,
+        inertial_resistance: None,
     },
     // Wood = 11
     ParticleTypeProperties {
@@ -219,6 +231,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: Some(200),
         base_durability: Some(70),
+        inertial_resistance: None,
     },
     // Acid = 12
     ParticleTypeProperties {
@@ -234,6 +247,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: Some(50),
+        inertial_resistance: None,
     },
 ];
 
@@ -282,6 +296,7 @@ pub struct Particle {
     status: Status,
     burning: bool,
     moved: Option<bool>,
+    is_free_falling: Option<bool>,
     velocity: Option<I8Vec2>,
     condensation_countdown: Option<i16>,
     initial_condensation_countdown: Option<i16>,
@@ -311,6 +326,13 @@ impl Particle {
             None
         };
 
+        let is_free_falling =
+            if particle_type.properties().moves && !particle_type.properties().fluid {
+                Some(true)
+            } else {
+                None
+            };
+
         let burning = particle_type == ParticleType::Flame;
 
         let fuel = particle_type.properties().base_fuel;
@@ -335,6 +357,7 @@ impl Particle {
             status: Status::Alive,
             burning,
             moved,
+            is_free_falling,
             velocity,
             condensation_countdown,
             initial_condensation_countdown: condensation_countdown,
@@ -574,21 +597,50 @@ impl Particle {
                 Ordering::Less => CHECKDIR_DOWN_INCLUSIVE_LEFT,
             };
             self.movement_loop_fluid(api, check_directions.into());
+
+            // TODO: Right now this causes chunks to wake up unnecessarily
+            Particle::set_neighbours_free_falling(api);
         } else {
             // solid movement
             let vx = self.velocity.unwrap().x;
-            let check_directions = match vx.cmp(&0) {
-                Ordering::Equal => {
-                    if api.random() {
-                        CHECKDIR_DOWN_INCLUSIVE_RIGHT
-                    } else {
-                        CHECKDIR_DOWN_INCLUSIVE_LEFT
+
+            let check_directions = if self.is_free_falling.unwrap() {
+                match vx.cmp(&0) {
+                    Ordering::Equal => {
+                        if api.random() {
+                            CHECKDIR_DOWN_INCLUSIVE_RIGHT.to_vec()
+                        } else {
+                            CHECKDIR_DOWN_INCLUSIVE_LEFT.to_vec()
+                        }
                     }
+                    Ordering::Greater => CHECKDIR_DOWN_INCLUSIVE_RIGHT.to_vec(),
+                    Ordering::Less => CHECKDIR_DOWN_INCLUSIVE_LEFT.to_vec(),
                 }
-                Ordering::Greater => CHECKDIR_DOWN_INCLUSIVE_RIGHT,
-                Ordering::Less => CHECKDIR_DOWN_INCLUSIVE_LEFT,
+            } else {
+                vec![DOWN]
             };
-            self.movement_loop_solid(api, check_directions.into());
+            self.movement_loop_solid(api, check_directions);
+            self.is_free_falling = if self.moved.unwrap() {
+                Particle::set_neighbours_free_falling(api);
+                Some(true)
+            } else {
+                Some(false)
+            };
+        }
+    }
+
+    fn set_neighbours_free_falling(api: &mut WorldApi) {
+        for dxdy in [(-1, 0), (1, 0)].into_iter() {
+            let is_free_falling = api.neighbour(dxdy).is_free_falling;
+            if let Some(is_free_falling) = is_free_falling {
+                let ptype = api.neighbour(dxdy).particle_type;
+                if !is_free_falling
+                    && api.random::<f32>() > ptype.properties().inertial_resistance.unwrap()
+                {
+                    let neighbour = api.neighbour_mut(dxdy);
+                    neighbour.is_free_falling = Some(true);
+                }
+            }
         }
     }
 
@@ -624,9 +676,9 @@ impl Particle {
             } else if dir == DOWN {
                 if let Some(vel) = self.velocity.as_mut() {
                     vel.x = if vel.x > 0 {
-                        i8::max(vel.x + vel.y - 2, 0)
+                        i8::max(vel.x + vel.y - (1 + api.random_range(0..=1)), 0)
                     } else {
-                        i8::min(vel.x - vel.y + 2, 0)
+                        i8::min(vel.x - vel.y + (1 + api.random_range(0..=1)), 0)
                     };
                     vel.y = 0;
                 }
