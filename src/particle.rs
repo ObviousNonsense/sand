@@ -609,9 +609,9 @@ impl Particle {
                 dir
             };
 
-            if dxdy.x.abs() > 1 {
+            if dxdy.x.abs() > 1 && dxdy.y.abs() == 0 {
                 self.try_moving_horizontal_until_gap(dxdy, api);
-            } else if dxdy.y.abs() > 1 {
+            } else if dxdy.y.abs() > 1 && dxdy.x.abs() == 0 {
                 self.try_moving_along_line(dxdy, api);
             } else {
                 self.try_moving_one_space(dxdy, api);
@@ -623,12 +623,10 @@ impl Particle {
                 return;
             } else if dir == DOWN {
                 if let Some(vel) = self.velocity.as_mut() {
-                    if vel.x > 0 {
-                        vel.x += vel.y;
-                        vel.x = i8::max(vel.x - 2, 0)
+                    vel.x = if vel.x > 0 {
+                        i8::max(vel.x + vel.y - 2, 0)
                     } else {
-                        vel.x -= vel.y;
-                        vel.x = i8::min(vel.x + 2, 0)
+                        i8::min(vel.x - vel.y + 2, 0)
                     };
                     vel.y = 0;
                 }
@@ -654,7 +652,7 @@ impl Particle {
 
             if dxdy.x.abs() > 1 && dxdy.y.abs() == 0 {
                 self.try_moving_horizontal_until_gap(dxdy, api);
-            } else if dxdy.x.abs() == 0 && dxdy.y.abs() > 1 {
+            } else if dxdy.y.abs() > 1 && dxdy.x.abs() == 0 {
                 self.try_moving_along_line(dxdy, api);
             } else {
                 self.try_moving_one_space(dxdy, api);
@@ -666,12 +664,10 @@ impl Particle {
                 return;
             } else if dir == DOWN {
                 if let Some(vel) = self.velocity.as_mut() {
-                    if vel.x > 0 {
-                        vel.x += vel.y;
-                        vel.x = i8::max(vel.x - 1, 0)
+                    vel.x = if vel.x > 0 {
+                        i8::max(vel.x + vel.y - 1, 0)
                     } else {
-                        vel.x -= vel.y;
-                        vel.x = i8::min(vel.x + 1, 0)
+                        i8::min(vel.x - vel.y + 1, 0)
                     };
                     vel.y = 0;
                 }
