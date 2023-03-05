@@ -283,7 +283,6 @@ pub struct Particle {
     burning: bool,
     moved: Option<bool>,
     velocity: Option<I8Vec2>,
-    moving_right: Option<bool>,
     condensation_countdown: Option<i16>,
     initial_condensation_countdown: Option<i16>,
     watered: Option<bool>,
@@ -298,12 +297,6 @@ impl Particle {
             (Some(false), Some(I8Vec2::ZERO))
         } else {
             (None, None)
-        };
-
-        let moving_right = if particle_type.properties().fluid {
-            Some(rng.gen())
-        } else {
-            None
         };
 
         let condensation_countdown = if particle_type == ParticleType::Steam {
@@ -343,7 +336,6 @@ impl Particle {
             burning,
             moved,
             velocity,
-            moving_right,
             condensation_countdown,
             initial_condensation_countdown: condensation_countdown,
             watered,
@@ -567,32 +559,21 @@ impl Particle {
             }
         }
 
-        // let mut last_dir = None;
-        let last_dir;
-
         if self.particle_type.properties().fluid {
             // fluid movement
-
-            let check_directions = if self.moving_right.unwrap() {
-                CHECKDIR_DOWN_INCLUSIVE_RIGHT
-            } else {
-                CHECKDIR_DOWN_INCLUSIVE_LEFT
+            let vx = self.velocity.unwrap().x;
+            let check_directions = match vx.cmp(&0) {
+                Ordering::Equal => {
+                    if api.random() {
+                        CHECKDIR_DOWN_INCLUSIVE_RIGHT
+                    } else {
+                        CHECKDIR_DOWN_INCLUSIVE_LEFT
+                    }
+                }
+                Ordering::Greater => CHECKDIR_DOWN_INCLUSIVE_RIGHT,
+                Ordering::Less => CHECKDIR_DOWN_INCLUSIVE_LEFT,
             };
-
-            let last_direction_to_check = check_directions[4];
-
-            last_dir = self.movement_loop_fluid(api, check_directions.into());
-
-            if let Some(last_dir) = last_dir {
-                if last_dir == DOWN_L {
-                    self.moving_right = Some(false)
-                }
-                if last_dir == DOWN_R {
-                    self.moving_right = Some(true)
-                } else if last_dir == last_direction_to_check {
-                    self.moving_right = Some(!self.moving_right.unwrap());
-                }
-            }
+            self.movement_loop_fluid(api, check_directions.into());
         } else {
             // solid movement
             let vx = self.velocity.unwrap().x;
@@ -640,8 +621,8 @@ impl Particle {
                     vel.x = dxdy.x.signum() * vel.x.abs();
                 }
                 return;
-            } else if let Some(vel) = self.velocity.as_mut() {
-                if dir == DOWN {
+            } else if dir == DOWN {
+                if let Some(vel) = self.velocity.as_mut() {
                     if vel.x > 0 {
                         vel.x += vel.y;
                         vel.x = i8::max(vel.x - 2, 0)
@@ -655,11 +636,7 @@ impl Particle {
         }
     }
 
-    fn movement_loop_fluid(
-        &mut self,
-        api: &mut WorldApi,
-        check_directions: Vec<I8Vec2>,
-    ) -> Option<I8Vec2> {
+    fn movement_loop_fluid(&mut self, api: &mut WorldApi, check_directions: Vec<I8Vec2>) {
         //
         let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(0) as i8;
         for dir in check_directions.into_iter() {
@@ -668,31 +645,38 @@ impl Particle {
             let r = if self.rises() { -1 } else { 1 };
 
             let dxdy = if dir.y == 0 {
-                i8vec2((dispersion_rate + velocity.x) * dir.x, 0)
+                i8vec2((velocity.x.abs() + dispersion_rate) * dir.x, 0)
             } else if r == 1 && dir.x == 0 {
                 i8vec2(0, velocity.y * dir.y)
             } else {
                 i8vec2(dir.x, r * dir.y)
             };
 
-            if dxdy.x.abs() > 1 {
+            if dxdy.x.abs() > 1 && dxdy.y.abs() == 0 {
                 self.try_moving_horizontal_until_gap(dxdy, api);
-            } else if dxdy.y.abs() > 1 {
+            } else if dxdy.x.abs() == 0 && dxdy.y.abs() > 1 {
                 self.try_moving_along_line(dxdy, api);
             } else {
                 self.try_moving_one_space(dxdy, api);
             }
             if self.moved.unwrap() {
-                return Some(dir);
-            } else if let Some(vel) = self.velocity.as_mut() {
-                if dir == DOWN {
-                    vel.x += vel.y;
-                    vel.x = i8::max(vel.x - 2, 0);
+                if let Some(vel) = self.velocity.as_mut() {
+                    vel.x = dxdy.x.signum() * vel.x.abs();
+                }
+                return;
+            } else if dir == DOWN {
+                if let Some(vel) = self.velocity.as_mut() {
+                    if vel.x > 0 {
+                        vel.x += vel.y;
+                        vel.x = i8::max(vel.x - 1, 0)
+                    } else {
+                        vel.x -= vel.y;
+                        vel.x = i8::min(vel.x + 1, 0)
+                    };
                     vel.y = 0;
                 }
             }
         }
-        None
     }
 
     fn try_moving_along_line(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
@@ -709,7 +693,7 @@ impl Particle {
                 if other_type == ParticleType::Empty {
                     let r = if self.rises() { -1 } else { 1 };
                     if api.neighbour((0, r)).particle_type == ParticleType::Empty
-                    // && api.neighbour((-dx.signum(), r)).particle_type == ParticleType::Empty
+                        && api.neighbour((-dx.signum(), r)).particle_type == ParticleType::Empty
                     {
                         return false;
                     }
