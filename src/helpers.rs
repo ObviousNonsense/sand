@@ -24,14 +24,17 @@ where
     input_collection.into_iter().map(|x| x.into()).collect()
 }
 
+#[allow(dead_code)]
 pub const UP: I8Vec2 = I8Vec2::NEG_Y;
-pub const DN: I8Vec2 = I8Vec2::Y;
+pub const DOWN: I8Vec2 = I8Vec2::Y;
 pub const LEFT: I8Vec2 = I8Vec2::NEG_X;
 pub const RIGHT: I8Vec2 = I8Vec2::X;
+#[allow(dead_code)]
 pub const UP_L: I8Vec2 = I8Vec2::new(-1, -1);
+#[allow(dead_code)]
 pub const UP_R: I8Vec2 = I8Vec2::new(1, -1);
-pub const DN_L: I8Vec2 = I8Vec2::new(-1, 1);
-pub const DN_R: I8Vec2 = I8Vec2::new(1, 1);
+pub const DOWN_L: I8Vec2 = I8Vec2::new(-1, 1);
+pub const DOWN_R: I8Vec2 = I8Vec2::new(1, 1);
 
 // Copied from glam IVec2
 impl I8Vec2 {

@@ -1,6 +1,8 @@
+use std::cmp::Ordering;
+
 use super::*;
 use ::rand::{rngs::ThreadRng, Rng};
-use helpers::{DN, DN_L, DN_R, LEFT, RIGHT, UP, UP_L, UP_R};
+use helpers::{DOWN, DOWN_L, DOWN_R, LEFT, RIGHT};
 
 #[derive(Debug, Clone, Copy)]
 // The immutable properties of a particle type
@@ -240,17 +242,15 @@ impl ParticleType {
         PROPERTIES[*self as usize]
     }
 
-    fn premove_fn(&self) -> Box<dyn Fn(&mut Particle, I8Vec2, &mut WorldApi)> {
+    fn premove_fn(&self) -> fn(&mut Particle, I8Vec2, &mut WorldApi) {
         match self {
-            Self::Acid => Box::new(
-                |particle: &mut Particle, dxdy: I8Vec2, api: &mut WorldApi| {
-                    particle.try_decaying(dxdy, api);
-                },
-            ),
-            _ => Box::new(|_self: &mut Particle, _dxdy: I8Vec2, _api: &mut WorldApi| {}),
+            Self::Acid => Particle::try_decaying,
+            _ => empty_premove,
         }
     }
 }
+
+fn empty_premove(_: &mut Particle, _: I8Vec2, _: &mut WorldApi) {}
 
 #[derive(Debug, Clone, PartialEq)]
 #[repr(u8)]
@@ -537,6 +537,9 @@ impl Particle {
     }
 }
 
+const CHECKDIR_DOWN_INCLUSIVE_RIGHT: [I8Vec2; 5] = [DOWN, DOWN_R, DOWN_L, RIGHT, LEFT];
+const CHECKDIR_DOWN_INCLUSIVE_LEFT: [I8Vec2; 5] = [DOWN, DOWN_L, DOWN_R, LEFT, RIGHT];
+
 /// Movement Methods
 impl Particle {
     fn rises(&self) -> bool {
@@ -547,8 +550,6 @@ impl Particle {
         if self.moved.unwrap() {
             return;
         }
-
-        let check_directions;
 
         // Apply gravity to things that don't rise
         if !self.rises() {
@@ -572,21 +573,21 @@ impl Particle {
         if self.particle_type.properties().fluid {
             // fluid movement
 
-            check_directions = if self.moving_right.unwrap() {
-                vec![DN, DN_R, DN_L, RIGHT, LEFT]
+            let check_directions = if self.moving_right.unwrap() {
+                CHECKDIR_DOWN_INCLUSIVE_RIGHT
             } else {
-                vec![DN, DN_L, DN_R, LEFT, RIGHT]
+                CHECKDIR_DOWN_INCLUSIVE_LEFT
             };
 
-            let last_direction_to_check = check_directions[4].clone();
+            let last_direction_to_check = check_directions[4];
 
-            last_dir = self.movement_loop_fluid(api, check_directions);
+            last_dir = self.movement_loop_fluid(api, check_directions.into());
 
             if let Some(last_dir) = last_dir {
-                if last_dir == DN_L.into() {
+                if last_dir == DOWN_L {
                     self.moving_right = Some(false)
                 }
-                if last_dir == DN_R.into() {
+                if last_dir == DOWN_R {
                     self.moving_right = Some(true)
                 } else if last_dir == last_direction_to_check {
                     self.moving_right = Some(!self.moving_right.unwrap());
@@ -595,18 +596,18 @@ impl Particle {
         } else {
             // solid movement
             let vx = self.velocity.unwrap().x;
-            check_directions = if vx == 0 {
-                if api.random() {
-                    vec![DN, DN_R, DN_L, RIGHT, LEFT]
-                } else {
-                    vec![DN, DN_L, DN_R, LEFT, RIGHT]
+            let check_directions = match vx.cmp(&0) {
+                Ordering::Equal => {
+                    if api.random() {
+                        CHECKDIR_DOWN_INCLUSIVE_RIGHT
+                    } else {
+                        CHECKDIR_DOWN_INCLUSIVE_LEFT
+                    }
                 }
-            } else if vx > 0 {
-                vec![DN, DN_R, DN_L, RIGHT, LEFT]
-            } else {
-                vec![DN, DN_L, DN_R, LEFT, RIGHT]
+                Ordering::Greater => CHECKDIR_DOWN_INCLUSIVE_RIGHT,
+                Ordering::Less => CHECKDIR_DOWN_INCLUSIVE_LEFT,
             };
-            self.movement_loop_solid(api, check_directions);
+            self.movement_loop_solid(api, check_directions.into());
         }
     }
 
@@ -635,14 +636,20 @@ impl Particle {
                 self.try_moving_one_space(dxdy, api);
             }
             if self.moved.unwrap() {
-                return;
-            } else {
                 if let Some(vel) = self.velocity.as_mut() {
-                    if dir == DN {
+                    vel.x = dxdy.x.signum() * vel.x.abs();
+                }
+                return;
+            } else if let Some(vel) = self.velocity.as_mut() {
+                if dir == DOWN {
+                    if vel.x > 0 {
                         vel.x += vel.y;
-                        vel.x = i8::max(vel.x - 2 as i8, 0);
-                        vel.y = 0;
-                    }
+                        vel.x = i8::max(vel.x - 2, 0)
+                    } else {
+                        vel.x -= vel.y;
+                        vel.x = i8::min(vel.x + 2, 0)
+                    };
+                    vel.y = 0;
                 }
             }
         }
@@ -677,13 +684,11 @@ impl Particle {
             }
             if self.moved.unwrap() {
                 return Some(dir);
-            } else {
-                if let Some(vel) = self.velocity.as_mut() {
-                    if dir == DN {
-                        vel.x += vel.y;
-                        vel.x = i8::max(vel.x - 2 as i8, 0);
-                        vel.y = 0;
-                    }
+            } else if let Some(vel) = self.velocity.as_mut() {
+                if dir == DOWN {
+                    vel.x += vel.y;
+                    vel.x = i8::max(vel.x - 2, 0);
+                    vel.y = 0;
                 }
             }
         }
