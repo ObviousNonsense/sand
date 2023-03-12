@@ -552,8 +552,11 @@ impl Particle {
     }
 }
 
-const CHECKDIR_DOWN_INCLUSIVE_RIGHT: [I8Vec2; 5] = [DOWN, DOWN_R, DOWN_L, RIGHT, LEFT];
-const CHECKDIR_DOWN_INCLUSIVE_LEFT: [I8Vec2; 5] = [DOWN, DOWN_L, DOWN_R, LEFT, RIGHT];
+const CHECKDIR_DN_DNR_DNL_R_L: [I8Vec2; 5] = [DOWN, DOWN_R, DOWN_L, RIGHT, LEFT];
+const CHECKDIR_DN_DNL_DNR_L_R: [I8Vec2; 5] = [DOWN, DOWN_L, DOWN_R, LEFT, RIGHT];
+
+const CHECKDIR_DN_DNR_DNL_R: [I8Vec2; 4] = [DOWN, DOWN_R, DOWN_L, RIGHT];
+const CHECKDIR_DN_DNL_DNR_L: [I8Vec2; 4] = [DOWN, DOWN_L, DOWN_R, LEFT];
 
 /// Movement Methods
 impl Particle {
@@ -588,13 +591,13 @@ impl Particle {
             let check_directions = match vx.cmp(&0) {
                 Ordering::Equal => {
                     if api.random() {
-                        CHECKDIR_DOWN_INCLUSIVE_RIGHT
+                        CHECKDIR_DN_DNR_DNL_R_L
                     } else {
-                        CHECKDIR_DOWN_INCLUSIVE_LEFT
+                        CHECKDIR_DN_DNL_DNR_L_R
                     }
                 }
-                Ordering::Greater => CHECKDIR_DOWN_INCLUSIVE_RIGHT,
-                Ordering::Less => CHECKDIR_DOWN_INCLUSIVE_LEFT,
+                Ordering::Greater => CHECKDIR_DN_DNR_DNL_R_L,
+                Ordering::Less => CHECKDIR_DN_DNL_DNR_L_R,
             };
             self.movement_loop_fluid(api, check_directions.into());
 
@@ -605,20 +608,20 @@ impl Particle {
             let vx = self.velocity.unwrap().x;
 
             let check_directions = if self.is_free_falling.unwrap() {
-                // If we're free falling check every normal direction
+                // If we're free falling check every normal direction, without bouncing
                 match vx.cmp(&0) {
                     // If x velocity is 0, randomly pick whether to favour moving left or right
                     Ordering::Equal => {
                         if api.random() {
-                            CHECKDIR_DOWN_INCLUSIVE_RIGHT.to_vec()
+                            CHECKDIR_DN_DNR_DNL_R.to_vec()
                         } else {
-                            CHECKDIR_DOWN_INCLUSIVE_LEFT.to_vec()
+                            CHECKDIR_DN_DNL_DNR_L.to_vec()
                         }
                     }
                     // If x velocity is positive, favour moving right
-                    Ordering::Greater => CHECKDIR_DOWN_INCLUSIVE_RIGHT.to_vec(),
+                    Ordering::Greater => CHECKDIR_DN_DNR_DNL_R.to_vec(),
                     // If x velocity is negative, favour moving left
-                    Ordering::Less => CHECKDIR_DOWN_INCLUSIVE_LEFT.to_vec(),
+                    Ordering::Less => CHECKDIR_DN_DNL_DNR_L.to_vec(),
                 }
             } else {
                 // If we're not free falling (have stopped moving), only try moving down
