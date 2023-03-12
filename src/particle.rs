@@ -583,7 +583,7 @@ impl Particle {
         }
 
         if self.particle_type.properties().fluid {
-            // fluid movement
+            // ─── Fluid Movement ──────────────────────────────────────────
             let vx = self.velocity.unwrap().x;
             let check_directions = match vx.cmp(&0) {
                 Ordering::Equal => {
@@ -601,11 +601,13 @@ impl Particle {
             // TODO: Right now this causes chunks to wake up unnecessarily
             Particle::set_neighbours_free_falling(api);
         } else {
-            // solid movement
+            // ─── Solid Movement ──────────────────────────────────────────
             let vx = self.velocity.unwrap().x;
 
             let check_directions = if self.is_free_falling.unwrap() {
+                // If we're free falling check every normal direction
                 match vx.cmp(&0) {
+                    // If x velocity is 0, randomly pick whether to favour moving left or right
                     Ordering::Equal => {
                         if api.random() {
                             CHECKDIR_DOWN_INCLUSIVE_RIGHT.to_vec()
@@ -613,10 +615,13 @@ impl Particle {
                             CHECKDIR_DOWN_INCLUSIVE_LEFT.to_vec()
                         }
                     }
+                    // If x velocity is positive, favour moving right
                     Ordering::Greater => CHECKDIR_DOWN_INCLUSIVE_RIGHT.to_vec(),
+                    // If x velocity is negative, favour moving left
                     Ordering::Less => CHECKDIR_DOWN_INCLUSIVE_LEFT.to_vec(),
                 }
             } else {
+                // If we're not free falling (have stopped moving), only try moving down
                 vec![DOWN]
             };
             self.movement_loop_solid(api, check_directions);
@@ -650,35 +655,43 @@ impl Particle {
             //
             let velocity = self.velocity.unwrap();
             if dir.y == 0 && velocity.x == 0 {
+                // If a solid's x velocity is 0, it shouldn't try moving directly sideways
                 return;
             }
 
-            let dxdy = if dir.y == 0 {
-                i8vec2(dir.x, 0)
-            } else if dir.x == 0 {
-                i8vec2(0, velocity.y * dir.y)
-            } else {
-                dir
-            };
+            let dxdy;
 
-            if dxdy.x.abs() > 1 && dxdy.y.abs() == 0 {
-                self.try_moving_horizontal_until_gap(dxdy, api);
-            } else if dxdy.y.abs() > 1 && dxdy.x.abs() == 0 {
+            if dir.x == 0 {
+                // If we're moving straight down, we can move more than one space at a
+                // time (due to gravity)
+                dxdy = i8vec2(0, velocity.y * dir.y);
                 self.try_moving_along_line(dxdy, api);
             } else {
+                // Otherwise we can only move one space at a time.
+                dxdy = dir;
                 self.try_moving_one_space(dxdy, api);
-            }
+            };
+
             if self.moved.unwrap() {
+                // If we moved, our new velocity's x-direction will be the x-direction
+                // that we actually moved in
                 if let Some(vel) = self.velocity.as_mut() {
                     vel.x = dxdy.x.signum() * vel.x.abs();
                 }
+                // We moved, so we don't need to keep looking
                 return;
             } else if dir == DOWN {
+                // If we just tried moving down but failed, then we transfer our
+                // y-velocity to x-velocity and set y-velocity to 0.
                 if let Some(vel) = self.velocity.as_mut() {
+                    // Friction nees to be at least 1 because gravity gets added to
+                    // y-velocity every frame
+                    let friction = if api.random() { 1 } else { 2 };
+                    let transfered_velocity = vel.y - friction;
                     vel.x = if vel.x > 0 {
-                        i8::max(vel.x + vel.y - (1 + api.random_range(0..=1)), 0)
+                        i8::max(vel.x + transfered_velocity, 0)
                     } else {
-                        i8::min(vel.x - vel.y + (1 + api.random_range(0..=1)), 0)
+                        i8::min(vel.x - transfered_velocity, 0)
                     };
                     vel.y = 0;
                 }
@@ -727,6 +740,7 @@ impl Particle {
         }
     }
 
+    #[inline]
     fn try_moving_along_line(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
         iterate_over_line_delta(dxdy.into(), |dx, dy| {
             self.try_moving_one_space(i8vec2(dx as i8, dy as i8), api);
@@ -734,6 +748,7 @@ impl Particle {
         })
     }
 
+    #[inline]
     fn try_moving_horizontal_until_gap(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
         iterate_over_line_delta(dxdy.into(), |dx, dy| {
             let other_type = self.try_moving_one_space(i8vec2(dx as i8, dy as i8), api);
