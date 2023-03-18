@@ -48,9 +48,9 @@ async fn main() {
     .cycle();
 
     let chunk_size = 16;
-    let world_height = 16 * chunk_size;
-    let world_width = 16 * chunk_size;
-    let pixels_per_particle = 4;
+    let world_height = 10 * chunk_size;
+    let world_width = 10 * chunk_size;
+    let pixels_per_particle = 6;
 
     let painter = Painter::new(
         300.0,

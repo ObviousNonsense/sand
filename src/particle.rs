@@ -314,7 +314,7 @@ pub struct Particle {
     moved: Option<bool>,
     is_free_falling: Option<bool>,
     velocity: Option<I8Vec2>,
-    momentum: Option<Vec2>,
+    pub momentum: Option<Vec2>,
     condensation_countdown: Option<i16>,
     initial_condensation_countdown: Option<i16>,
     watered: Option<bool>,
@@ -420,6 +420,12 @@ impl Particle {
     pub fn refresh(&mut self) {
         self.updated = false;
         if self.particle_type.properties().moves {
+            // TODO Come up with a way to make momentum spreading through a pile get
+            // things on the other side to start moving (actually, this kind of already
+            // works, see QUESTION in try_moving_one_space method)
+
+            // if self.momentum.unwrap().length()
+            //     > 10.0 { self.is_free_falling = Some(true); }
             self.moved = Some(false);
         }
     }
@@ -698,26 +704,24 @@ impl Particle {
                 // We moved, so we don't need to keep looking
                 return;
             } else {
+                let mut mom = self.momentum.unwrap();
                 if dir == DOWN {
                     // If we just tried moving down but failed, then we transfer some
                     // y-momentum to x-momentum and reduce y-momentum by the same amount
-                    if let Some(mom) = self.momentum.as_mut() {
-                        let friction = self.particle_type.properties().dynamic_friction.unwrap();
-                        let transferred_momentum = mom.y - (GRAVITY + friction);
-                        mom.x = if mom.x.signum() == 1.0 {
-                            f32::max(mom.x + transferred_momentum, 0.0)
-                        } else {
-                            f32::min(mom.x - transferred_momentum, 0.0)
-                        };
-                        mom.y = f32::max(mom.y - (GRAVITY + friction), 0.0);
-                    }
+                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
+                    let momentum_y_to_x = mom.y - (GRAVITY + friction);
+                    mom.x = if mom.x.signum() == 1.0 {
+                        f32::max(mom.x + momentum_y_to_x, 0.0)
+                    } else {
+                        f32::min(mom.x - momentum_y_to_x, 0.0)
+                    };
+                    mom.y = f32::max(mom.y - (GRAVITY + friction), 0.0);
                 } else if dir.y == 1 {
                     // If we tried moving down diagonally, reduce y-momentum by friction
-                    if let Some(mom) = self.momentum.as_mut() {
-                        let friction = self.particle_type.properties().dynamic_friction.unwrap();
-                        mom.y = f32::max(mom.y - friction, 0.0);
-                    }
+                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
+                    mom.y = f32::max(mom.y - friction, 0.0);
                 }
+                self.momentum = Some(mom);
             }
         }
     }
@@ -850,8 +854,24 @@ impl Particle {
                 // return Some(other_type);
             }
 
-            if !self.moved.unwrap() {
-                // If we didn't move, transfer our momentum to the other particle
+            // If I'm moving freely and I hit something moveable and I failed to move
+            // against it, then transfer half my momentum to it.
+
+            // TODO The amount transfered should be related to weight
+
+            // QUESTION Not checking if momentum > 0 here allows it to transfer much
+            // better through solid piles, but I don't know how well that will work for
+            // fluids (especially if I want to start letting liquids move up)
+            if self.is_free_falling.unwrap_or(true) && !self.moved.unwrap()
+            // && self.momentum.unwrap().length_squared() > 0.0001
+            {
+                let other_p_mut = api.neighbour_mut(dxdy);
+                if let Some(is_free_falling) = other_p_mut.is_free_falling.as_mut() {
+                    *is_free_falling = true;
+                }
+                let half_my_momentum = self.momentum.unwrap() / 2.0;
+                other_p_mut.momentum = Some(other_p_mut.momentum.unwrap() + half_my_momentum);
+                self.momentum = Some(half_my_momentum);
             }
         }
         Some(other_type)

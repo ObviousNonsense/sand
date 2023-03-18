@@ -449,6 +449,34 @@ impl World {
                             format!("({},{})", chunk_x, chunk_y).as_str(),
                         );
                     }
+
+                    // TODO: Clean up the function calls etc for drawing momentum vectors
+                    for local_y in 0..self.chunk_size {
+                        for local_x in 0..self.chunk_size {
+                            let (global_x, global_y) =
+                                self.chunk_xy_to_global_xy((chunk_x, chunk_y), (local_x, local_y));
+
+                            let particle = &self.chunk_grid[(chunk_x, chunk_y)].particle_grid
+                                [(local_x, local_y)];
+                            if let Some(mom) = particle.momentum {
+                                // draw a line from the center of the particle in the
+                                // direction of the momentum, scaled down by 10
+                                let (px, py) = painter.xy_to_pixels(global_x, global_y);
+                                let px_center = px + painter.pixels_per_particle / 2.0;
+                                let py_center = py + painter.pixels_per_particle / 2.0;
+                                // TODO: scale factor here should be the same as in
+                                // mom2vel, and/or should be controllable
+                                draw_line(
+                                    px_center,
+                                    py_center,
+                                    px_center + painter.pixels_per_particle * mom.x / 10.0,
+                                    py_center + painter.pixels_per_particle * mom.y / 10.0,
+                                    2.0,
+                                    RED,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
