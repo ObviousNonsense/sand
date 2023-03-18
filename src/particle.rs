@@ -35,7 +35,7 @@ pub enum ParticleType {
     Fungus = 6,
     Flame = 7,
     Methane = 8,
-    Gunpowder = 9,
+    Coal = 9,
     Oil = 10,
     Wood = 11,
     Acid = 12,
@@ -109,8 +109,8 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: Some(20),
-        inertial_resistance: Some(0.0),
-        dynamic_friction: Some(8),
+        inertial_resistance: Some(0.025),
+        dynamic_friction: Some(15),
     },
     // Water = 4
     ParticleTypeProperties {
@@ -197,7 +197,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         inertial_resistance: None,
         dynamic_friction: None,
     },
-    // Gunpowder = 9
+    // Coal = 9
     ParticleTypeProperties {
         label: "Coal",
         base_color: PColor::new(5, 5, 5),
@@ -212,7 +212,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         base_fuel: Some(1000),
         base_durability: Some(20),
         inertial_resistance: Some(0.8),
-        dynamic_friction: Some(15),
+        dynamic_friction: Some(25),
     },
     // Oil = 10
     ParticleTypeProperties {
@@ -593,36 +593,24 @@ impl Particle {
 
         // Apply gravity to things that don't rise
         if !self.rises() {
-            // if let Some(vel) = self.velocity.as_mut() {
-            //     let mag_v_sq = vel.length_sq();
-            //     if mag_v_sq
-            //         < self
-            //             .particle_type
-            //             .properties()
-            //             .terminal_velocity_sq
-            //             .unwrap()
-            //     {
-            //         vel.y += 1;
-            //     }
-            // }
             if let Some(mom) = self.momentum.as_mut() {
                 mom.y += GRAVITY;
             }
         }
 
         if self.particle_type.properties().fluid {
-            // ─── Fluid Movement ──────────────────────────────────────────
+            // // ─── Fluid Movement ──────────────────────────────────────────
             // let vx = self.velocity.unwrap().x;
             // let check_directions = match vx.cmp(&0) {
             //     Ordering::Equal => {
             //         if api.random() {
-            //             CHECKDIR_DN_DNR_DNL_R_L
+            //             vec![DOWN, DOWN_R, DOWN_L, RIGHT, LEFT]
             //         } else {
-            //             CHECKDIR_DN_DNL_DNR_L_R
+            //             vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT]
             //         }
             //     }
-            //     Ordering::Greater => CHECKDIR_DN_DNR_DNL_R_L,
-            //     Ordering::Less => CHECKDIR_DN_DNL_DNR_L_R,
+            //     Ordering::Greater => vec![DOWN, DOWN_R, DOWN_L, RIGHT, LEFT],
+            //     Ordering::Less => vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT],
             // };
             // self.movement_loop_fluid(api, check_directions.into());
 
@@ -710,19 +698,23 @@ impl Particle {
                 // We moved, so we don't need to keep looking
                 return;
             } else if dir == DOWN {
-                // If we just tried moving down but failed, then we transfer our
-                // y-momentum to x-momentum and set y-momentum to 0.
+                // If we just tried moving down but failed, then we transfer some
+                // y-momentum to x-momentum and reduce y-momentum by the same amount
                 if let Some(mom) = self.momentum.as_mut() {
-                    // Friction nees to be at least equal to gravity because gravity gets
-                    // added to y-momentum every frame
                     let friction = self.particle_type.properties().dynamic_friction.unwrap();
-                    let transferred_momentum = mom.y - GRAVITY - friction;
+                    let transferred_momentum = mom.y - (GRAVITY + friction);
                     mom.x = if mom.x > 0 {
                         i32::max(mom.x + transferred_momentum, 0)
                     } else {
                         i32::min(mom.x - transferred_momentum, 0)
                     };
-                    mom.y = 0;
+                    mom.y = i32::max(mom.y - (GRAVITY + friction), 0);
+                }
+            } else if dir.y == 1 {
+                // If we tried moving down diagonally, reduce y-momentum by friction
+                if let Some(mom) = self.momentum.as_mut() {
+                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
+                    mom.y = i32::max(mom.y - friction, 0);
                 }
             }
         }

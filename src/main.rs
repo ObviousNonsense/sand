@@ -1037,7 +1037,7 @@ fn setup_ui(ctx: &egui::Context, settings: &mut Settings, world: &mut World, fps
                     particle_selector(ui, ParticleType::Fungus, settings);
                     particle_selector(ui, ParticleType::Flame, settings);
                     particle_selector(ui, ParticleType::Methane, settings);
-                    particle_selector(ui, ParticleType::Gunpowder, settings);
+                    particle_selector(ui, ParticleType::Coal, settings);
                     particle_selector(ui, ParticleType::Oil, settings);
                     particle_selector(ui, ParticleType::Wood, settings);
                     particle_selector(ui, ParticleType::Acid, settings);
