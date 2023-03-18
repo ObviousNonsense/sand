@@ -41,7 +41,7 @@ pub enum ParticleType {
     Acid = 12,
 }
 
-const GRAVITY: f32 = 10.0;
+const GRAVITY: f32 = 1.0;
 
 const PROPERTIES: [ParticleTypeProperties; 13] = [
     // Border = 0
@@ -110,7 +110,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         base_fuel: None,
         base_durability: Some(20),
         inertial_resistance: Some(0.025),
-        dynamic_friction: Some(15.0),
+        dynamic_friction: Some(1.5),
     },
     // Water = 4
     ParticleTypeProperties {
@@ -126,8 +126,8 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: None,
-        inertial_resistance: None,
-        dynamic_friction: None,
+        inertial_resistance: Some(0.0),
+        dynamic_friction: Some(1.5),
     },
     // Steam = 5
     ParticleTypeProperties {
@@ -143,8 +143,8 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: None,
-        inertial_resistance: None,
-        dynamic_friction: None,
+        inertial_resistance: Some(0.0),
+        dynamic_friction: Some(1.5),
     },
     // Fungus = 6
     ParticleTypeProperties {
@@ -194,8 +194,8 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: Some(6),
         base_durability: None,
-        inertial_resistance: None,
-        dynamic_friction: None,
+        inertial_resistance: Some(0.0),
+        dynamic_friction: Some(1.5),
     },
     // Coal = 9
     ParticleTypeProperties {
@@ -212,7 +212,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         base_fuel: Some(1000),
         base_durability: Some(20),
         inertial_resistance: Some(0.8),
-        dynamic_friction: Some(25.0),
+        dynamic_friction: Some(1.5),
     },
     // Oil = 10
     ParticleTypeProperties {
@@ -228,8 +228,8 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: Some(25),
         base_durability: None,
-        inertial_resistance: None,
-        dynamic_friction: None,
+        inertial_resistance: Some(0.0),
+        dynamic_friction: Some(1.5),
     },
     // Wood = 11
     ParticleTypeProperties {
@@ -262,8 +262,8 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
         wet_flammability: None,
         base_fuel: None,
         base_durability: Some(50),
-        inertial_resistance: None,
-        dynamic_friction: None,
+        inertial_resistance: Some(0.0),
+        dynamic_friction: Some(1.5),
     },
 ];
 
@@ -312,9 +312,8 @@ pub struct Particle {
     status: Status,
     burning: bool,
     moved: Option<bool>,
-    is_free_falling: Option<bool>,
-    velocity: Option<I8Vec2>,
-    pub momentum: Option<Vec2>,
+    is_in_motion: Option<bool>,
+    pub velocity: Option<Vec2>,
     condensation_countdown: Option<i16>,
     initial_condensation_countdown: Option<i16>,
     watered: Option<bool>,
@@ -325,10 +324,10 @@ pub struct Particle {
 // General Particle Methods
 impl Particle {
     pub fn new(particle_type: ParticleType, rng: &mut ThreadRng) -> Self {
-        let (moved, velocity, momentum) = if particle_type.properties().moves {
-            (Some(false), Some(I8Vec2::ZERO), Some(Vec2::ZERO))
+        let (moved, velocity) = if particle_type.properties().moves {
+            (Some(false), Some(Vec2::ZERO))
         } else {
-            (None, None, None)
+            (None, None)
         };
 
         let condensation_countdown = if particle_type == ParticleType::Steam {
@@ -343,12 +342,12 @@ impl Particle {
             None
         };
 
-        let is_free_falling =
-            if particle_type.properties().moves && !particle_type.properties().fluid {
-                Some(true)
-            } else {
-                None
-            };
+        // let is_in_motion = if particle_type.properties().moves && !particle_type.properties().fluid
+        let is_in_motion = if particle_type.properties().moves {
+            Some(true)
+        } else {
+            None
+        };
 
         let burning = particle_type == ParticleType::Flame;
 
@@ -374,9 +373,8 @@ impl Particle {
             status: Status::Alive,
             burning,
             moved,
-            is_free_falling,
+            is_in_motion,
             velocity,
-            momentum,
             condensation_countdown,
             initial_condensation_countdown: condensation_countdown,
             watered,
@@ -420,12 +418,22 @@ impl Particle {
     pub fn refresh(&mut self) {
         self.updated = false;
         if self.particle_type.properties().moves {
-            // TODO Come up with a way to make momentum spreading through a pile get
+            // TODO Come up with a way to make velocity spreading through a pile get
             // things on the other side to start moving (actually, this kind of already
             // works, see QUESTION in try_moving_one_space method)
 
-            // if self.momentum.unwrap().length()
-            //     > 10.0 { self.is_free_falling = Some(true); }
+            // if self.velocity.unwrap().length() > 10.0 {
+            //     self.is_in_motion = Some(true);
+            // } else {
+            //     self.is_in_motion = Some(false);
+            // }
+            // self.velocity = Some(Vec2::new(
+            //     self.velocity.unwrap().x.trunc(),
+            //     self.velocity.unwrap().y.trunc(),
+            // ));
+            // if self.velocity.unwrap() == Vec2::ZERO {
+            //     self.is_in_motion = Some(false);
+            // }
             self.moved = Some(false);
         }
     }
@@ -582,8 +590,9 @@ impl Particle {
 // const CHECKDIR_DN_DNR_DNL_R: [I8Vec2; 4] = [DOWN, DOWN_R, DOWN_L, RIGHT];
 // const CHECKDIR_DN_DNL_DNR_L: [I8Vec2; 4] = [DOWN, DOWN_L, DOWN_R, LEFT];
 
-fn mom2vel(momentum: Vec2) -> I8Vec2 {
-    I8Vec2::new((momentum.x / 10.0) as i8, (momentum.y / 10.0) as i8)
+fn mom2vel(velocity: Vec2) -> I8Vec2 {
+    // I8Vec2::new((velocity.x / 10.0) as i8, (velocity.y / 10.0) as i8)
+    I8Vec2::new(velocity.x as i8, velocity.y as i8)
 }
 
 /// Movement Methods
@@ -599,43 +608,58 @@ impl Particle {
 
         // Apply gravity to things that don't rise
         if !self.rises() {
-            if let Some(mom) = self.momentum.as_mut() {
-                mom.y += GRAVITY;
+            if let Some(vel) = self.velocity.as_mut() {
+                vel.y += GRAVITY;
             }
         }
 
         if self.particle_type.properties().fluid {
             // // ─── Fluid Movement ──────────────────────────────────────────
-            // let vx = self.velocity.unwrap().x;
-            // let check_directions = match vx.cmp(&0) {
-            //     Ordering::Equal => {
-            //         if api.random() {
-            //             vec![DOWN, DOWN_R, DOWN_L, RIGHT, LEFT]
-            //         } else {
-            //             vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT]
-            //         }
-            //     }
-            //     Ordering::Greater => vec![DOWN, DOWN_R, DOWN_L, RIGHT, LEFT],
-            //     Ordering::Less => vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT],
-            // };
-            // self.movement_loop_fluid(api, check_directions.into());
+            let velx = self.velocity.unwrap().x;
+            // If we're free falling check every normal direction, with bouncing
+            let check_directions = if self.is_in_motion.unwrap() {
+                if velx.abs() < 0.0001 {
+                    // If x velocity is 0, randomly pick whether to favour moving left or right
+                    if api.random() {
+                        vec![DOWN, DOWN_R, DOWN_L, RIGHT, LEFT]
+                    } else {
+                        vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT]
+                    }
+                } else if velx > 0.0 {
+                    // If x velocity is positive, favour moving right
+                    vec![DOWN, DOWN_R, DOWN_L, RIGHT, LEFT]
+                } else {
+                    // If x velocity is negative, favour moving left
+                    vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT]
+                }
+            } else {
+                // If we're not free falling (have stopped moving), only try moving down
+                vec![DOWN]
+            };
+            self.movement_loop_fluid(api, check_directions.into());
+            if self.moved.unwrap() {
+                // Particle::set_neighbours_free_falling(api);
+                self.is_in_motion = Some(true)
+            } else if self.velocity.unwrap() == Vec2::ZERO {
+                self.is_in_motion = Some(false)
+            };
 
             // // TODO: Right now this causes chunks to wake up unnecessarily
             // Particle::set_neighbours_free_falling(api);
         } else {
             // ─── Solid Movement ──────────────────────────────────────────
-            let momx = self.momentum.unwrap().x;
+            let velx = self.velocity.unwrap().x;
 
-            let check_directions = if self.is_free_falling.unwrap() {
+            let check_directions = if self.is_in_motion.unwrap() {
                 // If we're free falling check every normal direction, without bouncing
-                if momx.abs() < 0.0001 {
+                if velx.abs() < 0.0001 {
                     // If x velocity is 0, randomly pick whether to favour moving left or right
                     if api.random() {
                         vec![DOWN, DOWN_R, DOWN_L, RIGHT]
                     } else {
                         vec![DOWN, DOWN_L, DOWN_R, LEFT]
                     }
-                } else if momx.signum() == 1.0 {
+                } else if velx > 0.0 {
                     // If x velocity is positive, favour moving right
                     vec![DOWN, DOWN_R, DOWN_L, RIGHT]
                 } else {
@@ -649,23 +673,23 @@ impl Particle {
             self.movement_loop_solid(api, check_directions);
             if self.moved.unwrap() {
                 // Particle::set_neighbours_free_falling(api);
-                self.is_free_falling = Some(true)
-            } else if self.momentum.unwrap() == Vec2::ZERO {
-                self.is_free_falling = Some(false)
+                self.is_in_motion = Some(true)
+            } else if self.velocity.unwrap() == Vec2::ZERO {
+                self.is_in_motion = Some(false)
             };
         }
     }
 
-    fn set_neighbours_free_falling(api: &mut WorldApi) {
+    fn set_neighbours_in_motion(api: &mut WorldApi) {
         for dxdy in [(-1, 0), (1, 0), (-1, -1), (1, -1)].into_iter() {
-            let is_free_falling = api.neighbour(dxdy).is_free_falling;
-            if let Some(is_free_falling) = is_free_falling {
+            let is_in_motion = api.neighbour(dxdy).is_in_motion;
+            if let Some(is_in_motion) = is_in_motion {
                 let ptype = api.neighbour(dxdy).particle_type;
-                if !is_free_falling
+                if !is_in_motion
                     && api.random::<f32>() > ptype.properties().inertial_resistance.unwrap()
                 {
                     let neighbour = api.neighbour_mut(dxdy);
-                    neighbour.is_free_falling = Some(true);
+                    neighbour.is_in_motion = Some(true);
                 }
             }
         }
@@ -675,19 +699,19 @@ impl Particle {
         //
         for dir in check_directions.into_iter() {
             //
-            let momentum = self.momentum.unwrap();
-            if dir.y == 0 && momentum.x.abs() <= 0.0001 {
-                // If a solid's x momentum is 0, it shouldn't try moving directly sideways
+            let velocity = self.velocity.unwrap();
+            if dir.y == 0 && velocity.x.abs() <= 0.0001 {
+                // If a solid's x velocity is 0, it shouldn't try moving directly sideways
                 return;
             }
 
-            let velocity = mom2vel(momentum);
+            // let velocity = mom2vel(velocity);
             let dxdy;
 
             if dir.x == 0 {
                 // If we're moving straight down, we can move more than one space at a
                 // time (due to gravity)
-                dxdy = i8vec2(0, velocity.y * dir.y);
+                dxdy = i8vec2(0, velocity.y as i8 * dir.y);
                 self.try_moving_along_line(dxdy, api);
             } else {
                 // Otherwise we can only move one space at a time.
@@ -696,75 +720,95 @@ impl Particle {
             };
 
             if self.moved.unwrap() {
-                // If we moved, our new momentum's x-direction will be the x-direction
+                // If we moved, our new velocity's x-direction will be the x-direction
                 // that we actually moved in
-                if let Some(mom) = self.momentum.as_mut() {
-                    mom.x = dxdy.x.signum() as f32 * mom.x.abs();
+                if let Some(vel) = self.velocity.as_mut() {
+                    // if dir.y == 1 {
+                    //     vel.y += GRAVITY;
+                    // }
+                    vel.x = dxdy.x.signum() as f32 * vel.x.abs();
                 }
                 // We moved, so we don't need to keep looking
                 return;
             } else {
-                let mut mom = self.momentum.unwrap();
+                let mut vel = self.velocity.unwrap();
                 if dir == DOWN {
                     // If we just tried moving down but failed, then we transfer some
-                    // y-momentum to x-momentum and reduce y-momentum by the same amount
+                    // y-velocity to x-velocity and reduce y-velocity by the same amount
                     let friction = self.particle_type.properties().dynamic_friction.unwrap();
-                    let momentum_y_to_x = mom.y - (GRAVITY + friction);
-                    mom.x = if mom.x.signum() == 1.0 {
-                        f32::max(mom.x + momentum_y_to_x, 0.0)
+                    let velocity_y_to_x = vel.y - (GRAVITY + friction);
+                    vel.x = if vel.x.signum() == 1.0 {
+                        f32::max(vel.x + velocity_y_to_x, 0.0)
                     } else {
-                        f32::min(mom.x - momentum_y_to_x, 0.0)
+                        f32::min(vel.x - velocity_y_to_x, 0.0)
                     };
-                    mom.y = f32::max(mom.y - (GRAVITY + friction), 0.0);
+                    vel.y = f32::max(vel.y - (GRAVITY + friction), 0.0);
                 } else if dir.y == 1 {
-                    // If we tried moving down diagonally, reduce y-momentum by friction
+                    // If we tried moving down diagonally, reduce y-velocity by friction
                     let friction = self.particle_type.properties().dynamic_friction.unwrap();
-                    mom.y = f32::max(mom.y - friction, 0.0);
+                    vel.y = f32::max(vel.y - friction, 0.0);
                 }
-                self.momentum = Some(mom);
+                self.velocity = Some(vel);
             }
         }
     }
 
-    // fn movement_loop_fluid(&mut self, api: &mut WorldApi, check_directions: Vec<I8Vec2>) {
-    //     //
-    //     let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(0) as i8;
-    //     for dir in check_directions.into_iter() {
-    //         //
-    //         let velocity = self.velocity.unwrap();
-    //         let r = if self.rises() { -1 } else { 1 };
-    //         let dxdy = if dir.y == 0 {
-    //             i8vec2((velocity.x.abs() + dispersion_rate) * dir.x, 0)
-    //         } else if r == 1 && dir.x == 0 {
-    //             i8vec2(0, velocity.y * dir.y)
-    //         } else {
-    //             i8vec2(dir.x, r * dir.y)
-    //         };
+    fn movement_loop_fluid(&mut self, api: &mut WorldApi, check_directions: Vec<I8Vec2>) {
+        //
+        let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(0) as i8;
+        for dir in check_directions.into_iter() {
+            //
+            let velocity = self.velocity.unwrap();
+            // let velocity = mom2vel(velocity);
+            let r = if self.rises() { -1 } else { 1 };
+            let dxdy;
 
-    //         if dxdy.x.abs() > 1 && dxdy.y.abs() == 0 {
-    //             self.try_moving_horizontal_until_gap(dxdy, api);
-    //         } else if dxdy.y.abs() > 1 && dxdy.x.abs() == 0 {
-    //             self.try_moving_along_line(dxdy, api);
-    //         } else {
-    //             self.try_moving_one_space(dxdy, api);
-    //         }
-    //         if self.moved.unwrap() {
-    //             if let Some(vel) = self.velocity.as_mut() {
-    //                 vel.x = dxdy.x.signum() * vel.x.abs();
-    //             }
-    //             return;
-    //         } else if dir == DOWN {
-    //             if let Some(vel) = self.velocity.as_mut() {
-    //                 vel.x = if vel.x > 0 {
-    //                     i8::max(vel.x + vel.y - 1, 0)
-    //                 } else {
-    //                     i8::min(vel.x - vel.y + 1, 0)
-    //                 };
-    //                 vel.y = 0;
-    //             }
-    //         }
-    //     }
-    // }
+            if dir.y == 0 {
+                // We're moving straight horizontally, so apply dispersion + whatever
+                // velocity we've accumulated and move multiple spaces at once
+                dxdy = i8vec2((velocity.x.abs() as i8 + dispersion_rate) * dir.x, 0);
+                self.try_moving_horizontal_until_gap(dxdy, api);
+            } else if r == 1 && dir.x == 0 {
+                // We're moving straight down (r == 1 means we don't rise), so move more
+                // than one space at a time due to gravity
+                dxdy = i8vec2(0, velocity.y as i8 * dir.y);
+                self.try_moving_along_line(dxdy, api);
+            } else {
+                // We rise and/or are moving diagonally, so move one space at a time.
+                dxdy = i8vec2(dir.x, r * dir.y);
+                self.try_moving_one_space(dxdy, api);
+            };
+
+            if self.moved.unwrap() {
+                // If we moved, our new velocity's x-direction will be the x-direction
+                // that we actually moved in
+                if let Some(vel) = self.velocity.as_mut() {
+                    vel.x = dxdy.x.signum() as f32 * vel.x.abs();
+                }
+                // We moved, so we don't need to keep looking
+                return;
+            } else {
+                let mut vel = self.velocity.unwrap();
+                if dir == DOWN {
+                    // If we just tried moving down but failed, then we transfer some
+                    // y-velocity to x-velocity and reduce y-velocity by the same amount
+                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
+                    let velocity_y_to_x = vel.y - (GRAVITY + friction);
+                    vel.x = if vel.x.signum() == 1.0 {
+                        f32::max(vel.x + velocity_y_to_x, 0.0)
+                    } else {
+                        f32::min(vel.x - velocity_y_to_x, 0.0)
+                    };
+                    vel.y = f32::max(vel.y - (GRAVITY + friction), 0.0);
+                } else if dir.y == 1 {
+                    // If we tried moving down diagonally, reduce y-velocity by friction
+                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
+                    vel.y = f32::max(vel.y - friction, 0.0);
+                }
+                self.velocity = Some(vel);
+            }
+        }
+    }
 
     #[inline]
     fn try_moving_along_line(&mut self, dxdy: I8Vec2, api: &mut WorldApi) {
@@ -835,7 +879,7 @@ impl Particle {
         if other_type == ParticleType::Empty {
             // If we're moving sideways don't compare weights, just do it
             if dxdy.y == 0 || Particle::weight_check(api, rises, my_weight, other_weight) {
-                Particle::set_neighbours_free_falling(api);
+                Particle::set_neighbours_in_motion(api);
                 self.moved = Some(true);
                 api.swap_with(dxdy);
                 // return Some(other_type);
@@ -846,7 +890,7 @@ impl Particle {
             if !other_p.moved.unwrap()
                 && Particle::weight_check(api, rises, my_weight, other_weight)
             {
-                Particle::set_neighbours_free_falling(api);
+                Particle::set_neighbours_in_motion(api);
                 let other_p_mut = api.neighbour_mut(dxdy);
                 other_p_mut.moved = Some(true);
                 self.moved = Some(true);
@@ -855,23 +899,51 @@ impl Particle {
             }
 
             // If I'm moving freely and I hit something moveable and I failed to move
-            // against it, then transfer half my momentum to it.
+            // against it, then transfer half my velocity to it.
 
             // TODO The amount transfered should be related to weight
 
-            // QUESTION Not checking if momentum > 0 here allows it to transfer much
+            // QUESTION Not checking if velocity > 0 here allows it to transfer much
             // better through solid piles, but I don't know how well that will work for
             // fluids (especially if I want to start letting liquids move up)
-            if self.is_free_falling.unwrap_or(true) && !self.moved.unwrap()
-            // && self.momentum.unwrap().length_squared() > 0.0001
+            if self.is_in_motion.unwrap() && !self.moved.unwrap()
+            // && self.velocity.unwrap().length_squared() > 0.0001
             {
                 let other_p_mut = api.neighbour_mut(dxdy);
-                if let Some(is_free_falling) = other_p_mut.is_free_falling.as_mut() {
-                    *is_free_falling = true;
+                if let Some(is_in_motion) = other_p_mut.is_in_motion.as_mut() {
+                    *is_in_motion = true;
                 }
-                let half_my_momentum = self.momentum.unwrap() / 2.0;
-                other_p_mut.momentum = Some(other_p_mut.momentum.unwrap() + half_my_momentum);
-                self.momentum = Some(half_my_momentum);
+
+                // Not sure if projecting onto the direction I'm moving is
+                // necessary, but it feels right anyway
+                // let half_my_velocity = self
+                //     .velocity
+                //     .unwrap()
+                //     .project_onto(Vec2::new(dxdy.x as f32, dxdy.y as f32))
+                //     / 2.0;
+                // other_p_mut.velocity = Some(other_p_mut.velocity.unwrap() + half_my_velocity);
+                // self.velocity = Some(self.velocity.unwrap() - half_my_velocity);
+                let u1 = self
+                    .velocity
+                    .unwrap()
+                    .project_onto(Vec2::new(dxdy.x as f32, dxdy.y as f32));
+                let u2 = other_p_mut.velocity.unwrap();
+                let m1 = self.particle_type.properties().weight;
+                let m2 = other_p_mut.particle_type.properties().weight;
+
+                let (v1, v2) = if m1 == m2 {
+                    (u2, u1)
+                } else {
+                    let m_total = m1 + m2;
+                    (
+                        (m1 - m2) * u1 / m_total + 2.0 * m2 * u2 / m_total,
+                        2.0 * m1 * u1 / m_total + (m2 - m1) * u2 / m_total,
+                    )
+                };
+
+                // HACK This 0.5 factor is pretty much random right now.
+                self.velocity = Some(v1);
+                other_p_mut.velocity = Some(v2);
             }
         }
         Some(other_type)

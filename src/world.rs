@@ -458,7 +458,7 @@ impl World {
 
                             let particle = &self.chunk_grid[(chunk_x, chunk_y)].particle_grid
                                 [(local_x, local_y)];
-                            if let Some(mom) = particle.momentum {
+                            if let Some(mom) = particle.velocity {
                                 // draw a line from the center of the particle in the
                                 // direction of the momentum, scaled down by 10
                                 let (px, py) = painter.xy_to_pixels(global_x, global_y);
@@ -469,8 +469,8 @@ impl World {
                                 draw_line(
                                     px_center,
                                     py_center,
-                                    px_center + painter.pixels_per_particle * mom.x / 10.0,
-                                    py_center + painter.pixels_per_particle * mom.y / 10.0,
+                                    px_center + painter.pixels_per_particle * mom.x,
+                                    py_center + painter.pixels_per_particle * mom.y,
                                     2.0,
                                     RED,
                                 )
