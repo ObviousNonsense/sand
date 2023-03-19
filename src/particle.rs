@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use super::*;
 use ::rand::{rngs::ThreadRng, Rng};
 use helpers::{DOWN, DOWN_L, DOWN_R, LEFT, RIGHT};
@@ -608,9 +606,10 @@ impl Particle {
             return;
         }
 
+        let velx = self.velocity.unwrap().x;
+
         if self.particle_type.properties().fluid {
             // // ─── Fluid Movement ──────────────────────────────────────────
-            let velx = self.velocity.unwrap().x;
             // If we're free falling check every normal direction, with bouncing
             // let check_directions = if self.is_in_motion.unwrap() {
             let check_directions = if velx.abs() < 0.0001 {
@@ -627,21 +626,9 @@ impl Particle {
                 // If x velocity is negative, favour moving left
                 vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT]
             };
-            self.movement_loop_fluid(api, check_directions.into());
-            // if self.moved.unwrap() || self.velocity.unwrap().length() > 0.0 {
-            if self.moved.unwrap() {
-                // Particle::set_neighbours_free_falling(api);
-                self.is_in_motion = Some(true)
-            } else if self.velocity.unwrap() == Vec2::ZERO {
-                self.is_in_motion = Some(false)
-            }
-
-            // // TODO: Right now this causes chunks to wake up unnecessarily
-            // Particle::set_neighbours_in_motion(api);
+            self.movement_loop(api, check_directions, Self::fluid_inner_movement_checks);
         } else {
             // ─── Solid Movement ──────────────────────────────────────────
-            let velx = self.velocity.unwrap().x;
-
             let check_directions = if self.is_in_motion.unwrap() {
                 // If we're free falling check every normal direction, without bouncing
                 if velx.abs() < 0.0001 {
@@ -662,14 +649,105 @@ impl Particle {
                 // If we're not free falling (have stopped moving), only try moving down
                 vec![DOWN]
             };
-            self.movement_loop_solid(api, check_directions);
-            // if self.moved.unwrap() || self.velocity.unwrap().length() > 0.0 {
+            self.movement_loop(api, check_directions, Self::solid_inner_movement_checks);
+        }
+
+        if self.moved.unwrap() {
+            // Particle::set_neighbours_in_motion(api);
+            self.is_in_motion = Some(true)
+        } else if self.velocity.unwrap() == Vec2::ZERO {
+            self.is_in_motion = Some(false)
+        };
+    }
+
+    #[inline]
+    fn solid_inner_movement_checks(&mut self, dir: &I8Vec2, api: &mut WorldApi) -> I8Vec2 {
+        let velocity = self.velocity.unwrap();
+        if dir.y == 0 && velocity.x.abs() <= 0.0001 {
+            // If a solid's x velocity is 0, it shouldn't try moving directly sideways
+            return I8Vec2::ZERO;
+        }
+
+        let dxdy;
+
+        if dir.x == 0 {
+            // If we're moving straight down, we can move more than one space at a
+            // time (due to gravity)
+            dxdy = i8vec2(0, velocity.y as i8 * dir.y);
+            self.try_moving_along_line(dxdy, api);
+        } else {
+            // Otherwise we can only move one space at a time.
+            dxdy = *dir;
+            self.try_moving_one_space(dxdy, api);
+        };
+
+        dxdy
+    }
+
+    #[inline]
+    fn fluid_inner_movement_checks(&mut self, dir: &I8Vec2, api: &mut WorldApi) -> I8Vec2 {
+        let velocity = self.velocity.unwrap();
+        let r = if self.rises() { -1 } else { 1 };
+        let dxdy;
+
+        if dir.y == 0 {
+            // We're moving straight horizontally, so apply dispersion + whatever
+            // velocity we've accumulated and move multiple spaces at once
+            let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap() as i8;
+            dxdy = i8vec2((velocity.x.abs() as i8 + dispersion_rate) * dir.x, 0);
+            self.try_moving_horizontal_until_gap(dxdy, api);
+        } else if r == 1 && dir.x == 0 {
+            // We're moving straight down (r == 1 means we don't rise), so move more
+            // than one space at a time due to gravity
+            dxdy = i8vec2(0, velocity.y as i8 * dir.y);
+            self.try_moving_along_line(dxdy, api);
+        } else {
+            // We rise and/or are moving diagonally, so move one space at a time.
+            dxdy = i8vec2(dir.x, r * dir.y);
+            self.try_moving_one_space(dxdy, api);
+        };
+
+        dxdy
+    }
+
+    fn movement_loop(
+        &mut self,
+        api: &mut WorldApi,
+        check_directions: Vec<I8Vec2>,
+        inner_movement_checks: fn(&mut Self, &I8Vec2, &mut WorldApi) -> I8Vec2,
+    ) {
+        //
+        for dir in check_directions.into_iter() {
+            let dxdy = inner_movement_checks(self, &dir, api);
+
             if self.moved.unwrap() {
-                // Particle::set_neighbours_in_motion(api);
-                self.is_in_motion = Some(true)
-            } else if self.velocity.unwrap() == Vec2::ZERO {
-                self.is_in_motion = Some(false)
-            };
+                // If we moved, our new velocity's x-direction will be the x-direction
+                // that we actually moved in
+                if let Some(vel) = self.velocity.as_mut() {
+                    vel.x = dxdy.x.signum() as f32 * vel.x.abs();
+                }
+                // We moved, so we don't need to keep looking
+                return;
+            } else {
+                let mut vel = self.velocity.unwrap();
+                if dir == DOWN {
+                    // If we just tried moving down but failed, then we transfer some
+                    // y-velocity to x-velocity and reduce y-velocity by the same amount
+                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
+                    let velocity_y_to_x = vel.y - (GRAVITY + friction);
+                    vel.x = if vel.x.signum() == 1.0 {
+                        f32::max(vel.x + velocity_y_to_x, 0.0)
+                    } else {
+                        f32::min(vel.x - velocity_y_to_x, 0.0)
+                    };
+                    vel.y = f32::max(vel.y - (GRAVITY + friction), 0.0);
+                } else if dir.y == 1 {
+                    // If we tried moving down diagonally, reduce y-velocity by friction
+                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
+                    vel.y = f32::max(vel.y - friction, 0.0);
+                }
+                self.velocity = Some(vel);
+            }
         }
     }
 
@@ -684,118 +762,6 @@ impl Particle {
                     let neighbour = api.neighbour_mut(dxdy);
                     neighbour.is_in_motion = Some(true);
                 }
-            }
-        }
-    }
-
-    fn movement_loop_solid(&mut self, api: &mut WorldApi, check_directions: Vec<I8Vec2>) {
-        //
-        for dir in check_directions.into_iter() {
-            //
-            let velocity = self.velocity.unwrap();
-            if dir.y == 0 && velocity.x.abs() <= 0.0001 {
-                // If a solid's x velocity is 0, it shouldn't try moving directly sideways
-                return;
-            }
-
-            // let velocity = mom2vel(velocity);
-            let dxdy;
-
-            if dir.x == 0 {
-                // If we're moving straight down, we can move more than one space at a
-                // time (due to gravity)
-                dxdy = i8vec2(0, velocity.y as i8 * dir.y);
-                self.try_moving_along_line(dxdy, api);
-            } else {
-                // Otherwise we can only move one space at a time.
-                dxdy = dir;
-                self.try_moving_one_space(dxdy, api);
-            };
-
-            if self.moved.unwrap() {
-                // If we moved, our new velocity's x-direction will be the x-direction
-                // that we actually moved in
-                if let Some(vel) = self.velocity.as_mut() {
-                    vel.x = dxdy.x.signum() as f32 * vel.x.abs();
-                }
-                // We moved, so we don't need to keep looking
-                return;
-            } else {
-                let mut vel = self.velocity.unwrap();
-                if dir == DOWN {
-                    // If we just tried moving down but failed, then we transfer some
-                    // y-velocity to x-velocity and reduce y-velocity by the same amount
-                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
-                    let velocity_y_to_x = vel.y - (GRAVITY + friction);
-                    vel.x = if vel.x.signum() == 1.0 {
-                        f32::max(vel.x + velocity_y_to_x, 0.0)
-                    } else {
-                        f32::min(vel.x - velocity_y_to_x, 0.0)
-                    };
-                    vel.y = f32::max(vel.y - (GRAVITY + friction), 0.0);
-                } else if dir.y == 1 {
-                    // If we tried moving down diagonally, reduce y-velocity by friction
-                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
-                    vel.y = f32::max(vel.y - friction, 0.0);
-                }
-                self.velocity = Some(vel);
-            }
-        }
-    }
-
-    fn movement_loop_fluid(&mut self, api: &mut WorldApi, check_directions: Vec<I8Vec2>) {
-        //
-        let dispersion_rate = self.particle_type.properties().dispersion_rate.unwrap_or(0) as i8;
-        for dir in check_directions.into_iter() {
-            //
-            let velocity = self.velocity.unwrap();
-            // let velocity = mom2vel(velocity);
-            let r = if self.rises() { -1 } else { 1 };
-            let dxdy;
-
-            if dir.y == 0 {
-                // We're moving straight horizontally, so apply dispersion + whatever
-                // velocity we've accumulated and move multiple spaces at once
-                dxdy = i8vec2((velocity.x.abs() as i8 + dispersion_rate) * dir.x, 0);
-                self.try_moving_horizontal_until_gap(dxdy, api);
-            } else if r == 1 && dir.x == 0 {
-                // We're moving straight down (r == 1 means we don't rise), so move more
-                // than one space at a time due to gravity
-                dxdy = i8vec2(0, velocity.y as i8 * dir.y);
-                self.try_moving_along_line(dxdy, api);
-            } else {
-                // We rise and/or are moving diagonally, so move one space at a time.
-                dxdy = i8vec2(dir.x, r * dir.y);
-                self.try_moving_one_space(dxdy, api);
-            };
-
-            if self.moved.unwrap() {
-                // If we moved, our new velocity's x-direction will be the x-direction
-                // that we actually moved in
-                if let Some(vel) = self.velocity.as_mut() {
-                    vel.x = dxdy.x.signum() as f32 * vel.x.abs();
-                }
-                // We moved, so we don't need to keep looking
-                return;
-            } else {
-                let mut vel = self.velocity.unwrap();
-                if dir == DOWN {
-                    // If we just tried moving down but failed, then we transfer some
-                    // y-velocity to x-velocity and reduce y-velocity by the same amount
-                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
-                    let velocity_y_to_x = vel.y - (GRAVITY + friction);
-                    vel.x = if vel.x.signum() == 1.0 {
-                        f32::max(vel.x + velocity_y_to_x, 0.0)
-                    } else {
-                        f32::min(vel.x - velocity_y_to_x, 0.0)
-                    };
-                    vel.y = f32::max(vel.y - (GRAVITY + friction), 0.0);
-                } else if dir.y == 1 {
-                    // If we tried moving down diagonally, reduce y-velocity by friction
-                    let friction = self.particle_type.properties().dynamic_friction.unwrap();
-                    vel.y = f32::max(vel.y - friction, 0.0);
-                }
-                self.velocity = Some(vel);
             }
         }
     }
