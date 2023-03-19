@@ -434,6 +434,12 @@ impl Particle {
             // if self.velocity.unwrap() == Vec2::ZERO {
             //     self.is_in_motion = Some(false);
             // }
+            // Apply gravity to things that don't rise
+            // if !self.rises() {
+            //     if let Some(vel) = self.velocity.as_mut() {
+            //         vel.y += GRAVITY;
+            //     }
+            // }
             self.moved = Some(false);
         }
     }
@@ -584,17 +590,6 @@ impl Particle {
     }
 }
 
-// const CHECKDIR_DN_DNR_DNL_R_L: [I8Vec2; 5] = [DOWN, DOWN_R, DOWN_L, RIGHT, LEFT];
-// const CHECKDIR_DN_DNL_DNR_L_R: [I8Vec2; 5] = [DOWN, DOWN_L, DOWN_R, LEFT, RIGHT];
-
-// const CHECKDIR_DN_DNR_DNL_R: [I8Vec2; 4] = [DOWN, DOWN_R, DOWN_L, RIGHT];
-// const CHECKDIR_DN_DNL_DNR_L: [I8Vec2; 4] = [DOWN, DOWN_L, DOWN_R, LEFT];
-
-fn mom2vel(velocity: Vec2) -> I8Vec2 {
-    // I8Vec2::new((velocity.x / 10.0) as i8, (velocity.y / 10.0) as i8)
-    I8Vec2::new(velocity.x as i8, velocity.y as i8)
-}
-
 /// Movement Methods
 impl Particle {
     fn rises(&self) -> bool {
@@ -602,10 +597,6 @@ impl Particle {
     }
 
     fn movement(&mut self, api: &mut WorldApi) {
-        if self.moved.unwrap() {
-            return;
-        }
-
         // Apply gravity to things that don't rise
         if !self.rises() {
             if let Some(vel) = self.velocity.as_mut() {
@@ -613,39 +604,40 @@ impl Particle {
             }
         }
 
+        if self.moved.unwrap() {
+            return;
+        }
+
         if self.particle_type.properties().fluid {
             // // ─── Fluid Movement ──────────────────────────────────────────
             let velx = self.velocity.unwrap().x;
             // If we're free falling check every normal direction, with bouncing
-            let check_directions = if self.is_in_motion.unwrap() {
-                if velx.abs() < 0.0001 {
-                    // If x velocity is 0, randomly pick whether to favour moving left or right
-                    if api.random() {
-                        vec![DOWN, DOWN_R, DOWN_L, RIGHT, LEFT]
-                    } else {
-                        vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT]
-                    }
-                } else if velx > 0.0 {
-                    // If x velocity is positive, favour moving right
+            // let check_directions = if self.is_in_motion.unwrap() {
+            let check_directions = if velx.abs() < 0.0001 {
+                // If x velocity is 0, randomly pick whether to favour moving left or right
+                if api.random() {
                     vec![DOWN, DOWN_R, DOWN_L, RIGHT, LEFT]
                 } else {
-                    // If x velocity is negative, favour moving left
                     vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT]
                 }
+            } else if velx > 0.0 {
+                // If x velocity is positive, favour moving right
+                vec![DOWN, DOWN_R, DOWN_L, RIGHT, LEFT]
             } else {
-                // If we're not free falling (have stopped moving), only try moving down
-                vec![DOWN]
+                // If x velocity is negative, favour moving left
+                vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT]
             };
             self.movement_loop_fluid(api, check_directions.into());
+            // if self.moved.unwrap() || self.velocity.unwrap().length() > 0.0 {
             if self.moved.unwrap() {
                 // Particle::set_neighbours_free_falling(api);
                 self.is_in_motion = Some(true)
             } else if self.velocity.unwrap() == Vec2::ZERO {
                 self.is_in_motion = Some(false)
-            };
+            }
 
             // // TODO: Right now this causes chunks to wake up unnecessarily
-            // Particle::set_neighbours_free_falling(api);
+            // Particle::set_neighbours_in_motion(api);
         } else {
             // ─── Solid Movement ──────────────────────────────────────────
             let velx = self.velocity.unwrap().x;
@@ -671,8 +663,9 @@ impl Particle {
                 vec![DOWN]
             };
             self.movement_loop_solid(api, check_directions);
+            // if self.moved.unwrap() || self.velocity.unwrap().length() > 0.0 {
             if self.moved.unwrap() {
-                // Particle::set_neighbours_free_falling(api);
+                // Particle::set_neighbours_in_motion(api);
                 self.is_in_motion = Some(true)
             } else if self.velocity.unwrap() == Vec2::ZERO {
                 self.is_in_motion = Some(false)
@@ -723,9 +716,6 @@ impl Particle {
                 // If we moved, our new velocity's x-direction will be the x-direction
                 // that we actually moved in
                 if let Some(vel) = self.velocity.as_mut() {
-                    // if dir.y == 1 {
-                    //     vel.y += GRAVITY;
-                    // }
                     vel.x = dxdy.x.signum() as f32 * vel.x.abs();
                 }
                 // We moved, so we don't need to keep looking
@@ -899,34 +889,19 @@ impl Particle {
             }
 
             // If I'm moving freely and I hit something moveable and I failed to move
-            // against it, then transfer half my velocity to it.
+            // against it, then transfer velocity to it.
 
             // TODO The amount transfered should be related to weight
 
             // QUESTION Not checking if velocity > 0 here allows it to transfer much
             // better through solid piles, but I don't know how well that will work for
             // fluids (especially if I want to start letting liquids move up)
+
             if self.is_in_motion.unwrap() && !self.moved.unwrap()
             // && self.velocity.unwrap().length_squared() > 0.0001
             {
                 let other_p_mut = api.neighbour_mut(dxdy);
-                if let Some(is_in_motion) = other_p_mut.is_in_motion.as_mut() {
-                    *is_in_motion = true;
-                }
-
-                // Not sure if projecting onto the direction I'm moving is
-                // necessary, but it feels right anyway
-                // let half_my_velocity = self
-                //     .velocity
-                //     .unwrap()
-                //     .project_onto(Vec2::new(dxdy.x as f32, dxdy.y as f32))
-                //     / 2.0;
-                // other_p_mut.velocity = Some(other_p_mut.velocity.unwrap() + half_my_velocity);
-                // self.velocity = Some(self.velocity.unwrap() - half_my_velocity);
-                let u1 = self
-                    .velocity
-                    .unwrap()
-                    .project_onto(Vec2::new(dxdy.x as f32, dxdy.y as f32));
+                let u1 = self.velocity.unwrap();
                 let u2 = other_p_mut.velocity.unwrap();
                 let m1 = self.particle_type.properties().weight;
                 let m2 = other_p_mut.particle_type.properties().weight;
@@ -941,9 +916,16 @@ impl Particle {
                     )
                 };
 
-                // HACK This 0.5 factor is pretty much random right now.
-                self.velocity = Some(v1);
-                other_p_mut.velocity = Some(v2);
+                // HACK This 0.8 factor is pretty much random right now.
+                self.velocity = Some(v1 * 0.8);
+                let other_new_velocity = v2 * 0.8;
+                other_p_mut.velocity = Some(other_new_velocity);
+
+                if other_new_velocity.length_squared() > 0.0001 {
+                    if let Some(other_is_in_motion) = other_p_mut.is_in_motion.as_mut() {
+                        *other_is_in_motion = true;
+                    }
+                }
             }
         }
         Some(other_type)

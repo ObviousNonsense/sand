@@ -110,7 +110,7 @@ async fn main() {
 
         // ─── Drawing ─────────────────────────────────────────────────────────────
         clear_background(BLACK);
-        world.draw_and_refresh(&mut settings.painter, settings.debug_mode);
+        world.draw_and_refresh(&mut settings.painter, settings.debug_mode, settings.paused);
         // ─────────────────────────────────────────────────────────────────────────
 
         cursor_input(&mut settings, &mut world);
@@ -538,7 +538,7 @@ fn keys_input(settings: &mut Settings, world: &mut World) {
     // Advance on "A" if paused
     if is_key_pressed(KeyCode::A) && settings.paused {
         println!("advance");
-        world.draw_and_refresh(&mut settings.painter, settings.debug_mode);
+        world.draw_and_refresh(&mut settings.painter, settings.debug_mode, false);
         world.update_all();
     }
     // Pause/Unpause with space

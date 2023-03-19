@@ -403,13 +403,15 @@ impl World {
     }
 
     // ─── Other ───────────────────────────────────────────────────────────────────────────
-    pub fn draw_and_refresh(&mut self, painter: &mut Painter, debug_chunks: bool) {
+    pub fn draw_and_refresh(&mut self, painter: &mut Painter, debug_chunks: bool, paused: bool) {
         let num_chunks_x = self.width / self.chunk_size;
         let num_chunks_y = self.height / self.chunk_size;
 
         for chunk_x in 0..num_chunks_x {
             for chunk_y in 0..num_chunks_y {
-                self.chunk_grid[(chunk_x, chunk_y)].refresh_all_particles();
+                if !paused {
+                    self.chunk_grid[(chunk_x, chunk_y)].refresh_all_particles();
+                }
                 if self.chunk_grid[(chunk_x, chunk_y)].update_this_frame
                     || self.chunk_grid[(chunk_x, chunk_y)].update_next_frame
                 {
@@ -458,7 +460,7 @@ impl World {
 
                             let particle = &self.chunk_grid[(chunk_x, chunk_y)].particle_grid
                                 [(local_x, local_y)];
-                            if let Some(mom) = particle.velocity {
+                            if let Some(vel) = particle.velocity {
                                 // draw a line from the center of the particle in the
                                 // direction of the momentum, scaled down by 10
                                 let (px, py) = painter.xy_to_pixels(global_x, global_y);
@@ -469,8 +471,8 @@ impl World {
                                 draw_line(
                                     px_center,
                                     py_center,
-                                    px_center + painter.pixels_per_particle * mom.x,
-                                    py_center + painter.pixels_per_particle * mom.y,
+                                    px_center + painter.pixels_per_particle * vel.x,
+                                    py_center + painter.pixels_per_particle * vel.y,
                                     2.0,
                                     RED,
                                 )
