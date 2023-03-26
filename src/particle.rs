@@ -46,7 +46,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     ParticleTypeProperties {
         label: "Border",
         base_color: PColor::new(129, 129, 129),
-        weight: f32::INFINITY,
+        weight: 1e12,
         moves: false,
         auto_move: false,
         fluid: false,
@@ -63,7 +63,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     ParticleTypeProperties {
         label: "Concrete",
         base_color: PColor::new(129, 129, 129),
-        weight: f32::INFINITY,
+        weight: 1e12,
         moves: false,
         auto_move: false,
         fluid: false,
@@ -148,7 +148,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     ParticleTypeProperties {
         label: "Fungus",
         base_color: PColor::new(103, 147, 131),
-        weight: f32::INFINITY,
+        weight: 1e12,
         moves: false,
         auto_move: false,
         fluid: false,
@@ -165,7 +165,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     ParticleTypeProperties {
         label: "Flame",
         base_color: PColor::new(255, 123, 36),
-        weight: f32::INFINITY,
+        weight: 1e12,
         moves: false,
         auto_move: false,
         fluid: false,
@@ -233,7 +233,7 @@ const PROPERTIES: [ParticleTypeProperties; 13] = [
     ParticleTypeProperties {
         label: "Wood",
         base_color: PColor::new(98, 57, 35),
-        weight: f32::INFINITY,
+        weight: 1e12,
         moves: false,
         auto_move: false,
         fluid: false,
@@ -626,6 +626,7 @@ impl Particle {
                 // If x velocity is negative, favour moving left
                 vec![DOWN, DOWN_L, DOWN_R, LEFT, RIGHT]
             };
+
             self.movement_loop(api, check_directions, Self::fluid_inner_movement_checks);
         } else {
             // ─── Solid Movement ──────────────────────────────────────────
@@ -734,6 +735,7 @@ impl Particle {
                     // If we just tried moving down but failed, then we transfer some
                     // y-velocity to x-velocity and reduce y-velocity by the same amount
                     let friction = self.particle_type.properties().dynamic_friction.unwrap();
+                    vel.y -= GRAVITY;
                     let velocity_y_to_x = vel.y - (GRAVITY + friction);
                     vel.x = if vel.x.signum() == 1.0 {
                         f32::max(vel.x + velocity_y_to_x, 0.0)
@@ -862,30 +864,34 @@ impl Particle {
             // QUESTION Not checking if velocity > 0 here allows it to transfer much
             // better through solid piles, but I don't know how well that will work for
             // fluids (especially if I want to start letting liquids move up)
+        }
 
-            if self.is_in_motion.unwrap() && !self.moved.unwrap()
-            // && self.velocity.unwrap().length_squared() > 0.0001
-            {
-                let other_p_mut = api.neighbour_mut(dxdy);
-                let u1 = self.velocity.unwrap();
-                let u2 = other_p_mut.velocity.unwrap();
-                let m1 = self.particle_type.properties().weight;
-                let m2 = other_p_mut.particle_type.properties().weight;
+        if self.is_in_motion.unwrap() && !self.moved.unwrap()
+        // && self.velocity.unwrap().length_squared() > 0.0001
+        {
+            let other_p_mut = api.neighbour_mut(dxdy);
+            let u1 = self.velocity.unwrap();
+            let u2 = other_p_mut.velocity.unwrap_or(Vec2::ZERO);
+            let m1 = self.particle_type.properties().weight;
+            let m2 = other_p_mut.particle_type.properties().weight;
 
-                let (v1, v2) = if m1 == m2 {
-                    (u2, u1)
-                } else {
-                    let m_total = m1 + m2;
-                    (
-                        (m1 - m2) * u1 / m_total + 2.0 * m2 * u2 / m_total,
-                        2.0 * m1 * u1 / m_total + (m2 - m1) * u2 / m_total,
-                    )
-                };
+            let (v1, v2) = if m1 == m2 {
+                (u2, u1)
+            } else {
+                let m_total = m1 + m2;
+                (
+                    ((m1 - m2) * u1 + 2.0 * m2 * u2) / m_total,
+                    (2.0 * m1 * u1 + (m2 - m1) * u2) / m_total,
+                )
+            };
 
-                // HACK This 0.8 factor is pretty much random right now.
-                self.velocity = Some(v1 * 0.8);
-                let other_new_velocity = v2 * 0.8;
-                other_p_mut.velocity = Some(other_new_velocity);
+            // HACK This 0.8 factor is pretty much random right now.
+            // dbg!(v1);
+            self.velocity = Some(0.8 * v1);
+
+            if let Some(other_vel) = other_p_mut.velocity.as_mut() {
+                let other_new_velocity = 0.8 * v2;
+                *other_vel = other_new_velocity;
 
                 if other_new_velocity.length_squared() > 0.0001 {
                     if let Some(other_is_in_motion) = other_p_mut.is_in_motion.as_mut() {
